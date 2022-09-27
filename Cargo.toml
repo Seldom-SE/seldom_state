@@ -1,0 +1,18 @@
+[package]
+name = "seldom_state"
+version = "0.0.1"
+edition = "2021"
+categories = [ "game-development" ]
+description = "Component-based state machine plugin for Bevy. Useful for AI, player state, and other entities that should change state."
+exclude = [ "assets/" ]
+keywords = [ "gamedev", "bevy", "ai", "state-machine" ]
+license = "MIT OR Apache-2.0"
+readme = "README.md"
+repository = "https://github.com/Seldom-SE/seldom_state"
+
+[dependencies]
+bevy = { version = "0.8", default-features = false }
+seldom_fn_plugin = "0.1"
+
+[dev-dependencies]
+bevy = "0.8"
