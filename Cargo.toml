@@ -1,9 +1,9 @@
 [package]
 name = "seldom_state"
-version = "0.0.1"
+version = "0.1.0"
 edition = "2021"
 categories = [ "game-development" ]
-description = "Component-based state machine plugin for Bevy. Useful for AI, player state, and other entities that should change state."
+description = "Component-based state machine plugin for Bevy. Useful for AI, player state, and other entities that occupy various states."
 exclude = [ "assets/" ]
 keywords = [ "gamedev", "bevy", "ai", "state-machine" ]
 license = "MIT OR Apache-2.0"

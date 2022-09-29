@@ -5,7 +5,7 @@
 [![Crates.io](https://img.shields.io/crates/d/seldom_state.svg)](https://crates.io/crates/seldom_state)
 
 `seldom_state` is a component-based state machine plugin for Bevy. It's useful for AI,
-player state, and other entities that should change state. It allows for greater reusability
+player state, and other entities that occupy various states. It allows for greater reusability
 of state logic between entities, compared to managing mutually-exclusive components directly
 in your systems.
 
@@ -30,7 +30,7 @@ commands.spawn()
     );
 ```
 
-For a more complete example, see the `examples` directory. The `chase.rs` example is written
+For more complete examples, see the `examples` directory. The `chase.rs` example is written
 like a guide, so it is good for learning. If you need help, feel free to ping me
 on [the Bevy Discord server](https://discord.com/invite/bevy) (`@Seldom`)! If any of the docs
 need improvement, feel free to submit an issue or pr!
@@ -45,7 +45,8 @@ need improvement, feel free to submit an issue or pr!
 
 ## Future Work
 
-- [ ] Transitions that can transition from any state (I am very likely to implement this myself)
+- [ ] Dataflow from triggers to states using state builders (I will probably implement this myself)
+- [ ] Transitions that can transition from any state (I will probably implement this myself)
 - [ ] More flexible, composable triggers, such as `And<A: Trigger, B: Trigger>(A, B)` (I might
 implement this, and definitely want it)
 - [ ] Multiple state machines on an entity (I probably won't implement this, and am still debating

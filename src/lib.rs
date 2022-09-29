@@ -1,5 +1,5 @@
 //! Component-based state machine plugin for Bevy. Useful for AI, player state,
-//! and other entities that should change state.
+//! and other entities that occupy different states.
 
 #![warn(missing_docs)]
 
