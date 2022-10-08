@@ -26,7 +26,7 @@ fn main() {
 fn init(mut commands: Commands, asset_server: Res<AssetServer>) {
     commands.spawn_bundle(Camera2dBundle::default());
 
-    let go_to_selection = GoToSelection::new(200.);
+    let go_to_selection = (GoToSelection::new(200.),);
 
     commands
         .spawn_bundle(SpriteBundle {
@@ -35,13 +35,13 @@ fn init(mut commands: Commands, asset_server: Res<AssetServer>) {
         })
         .insert(Player)
         .insert(
-            StateMachine::new(Idle)
+            StateMachine::new((Idle,))
                 // When the player clicks, go there
-                .trans::<Idle>(Click, go_to_selection)
-                .trans::<GoToSelection>(Click, go_to_selection)
+                .trans::<(Idle,)>(Click, go_to_selection)
+                .trans::<(GoToSelection,)>(Click, go_to_selection)
                 // `DoneTrigger` triggers when the `Done` component is added to the entity
                 // When they're done going to the selection, idle
-                .trans::<GoToSelection>(DoneTrigger, Idle),
+                .trans::<(GoToSelection,)>(DoneTrigger::success(), (Idle,)),
         );
 }
 
@@ -107,7 +107,7 @@ fn go_to_target(
             // The player has reached the target!
             // Add the `Done` component to the player, causing `DoneTrigger` to trigger
             // It will be automatically removed later this frame
-            commands.entity(entity).insert(Done);
+            commands.entity(entity).insert(Done::success());
             info!("Done!")
         } else {
             transform.translation += movement;

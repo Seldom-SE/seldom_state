@@ -78,19 +78,54 @@ impl<T: Trigger> Trigger for NotTrigger<T> {
 
 /// Marker component that represents that the current state has completed. Removed
 /// from every entity each frame after checking triggers. To be used with [`DoneTrigger`].
+/// In Bevy 0.9, this will be an enum with `Success` and `Failure` variants.
 #[derive(Component, Debug, Reflect)]
 #[component(storage = "SparseSet")]
-pub struct Done;
+pub struct Done {
+    success: bool,
+}
 
-/// Trigger that transitions if the entity has the [`Done`] component.
+impl Done {
+    /// Success variant
+    pub fn success() -> Self {
+        Self { success: true }
+    }
+
+    /// Failure variant
+    pub fn failure() -> Self {
+        Self { success: false }
+    }
+}
+
+/// Trigger that transitions if the entity has the [`Done`] component
+/// with the associated `success` value. In Bevy 0.9,
+/// this will be an enum with `Success` and `Failure` variants.
+// TODO variants
 #[derive(Debug, FromReflect, Reflect)]
-pub struct DoneTrigger;
+pub struct DoneTrigger {
+    success: bool,
+}
 
 impl Trigger for DoneTrigger {
-    type Param = SQuery<(), With<Done>>;
+    type Param = SQuery<&'static Done>;
 
     fn trigger(&self, entity: Entity, param: &StaticSystemParam<Self::Param>) -> bool {
-        param.contains(entity)
+        param
+            .get(entity)
+            .map(|done| self.success == done.success)
+            .unwrap_or(false)
+    }
+}
+
+impl DoneTrigger {
+    /// Success variant
+    pub fn success() -> Self {
+        Self { success: true }
+    }
+
+    /// Failure variant
+    pub fn failure() -> Self {
+        Self { success: false }
     }
 }
 

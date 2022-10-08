@@ -9,12 +9,13 @@ player state, and other entities that occupy various states. It allows for great
 of state logic between entities, compared to managing mutually-exclusive components directly
 in your systems.
 
-A *state* is a component attached to an entity that defines its current behavior,
-such as `Jumping` or `Stunned`. A *trigger* is a type that checks information about entities
-in the world, such as `NearPosition` or `HealthBelowThreshold`. A *transition* links two states:
-one to transition from, and one to transition to; once a given trigger has occurred.
-A *state machine* is a component attached to an entity that keeps track of that entity's
-transitions, and automatically changes the entity's state according to those transitions.
+A *state* is a bundle (usually with one component) attached to an entity that defines
+its current behavior, such as `(Jumping,)` or `(Stunned,)`. A *trigger* is a type that checks
+information about entities in the world, such as `NearPosition` or `HealthBelowThreshold`.
+A *transition* links two states: one to transition from, and one to transition to;
+once a given trigger has occurred. A *state machine* is a component attached to an entity
+that keeps track of that entity's transitions, and automatically changes the entity's state
+according to those transitions.
 
 State machines are created like so:
 
@@ -22,10 +23,10 @@ State machines are created like so:
 commands.spawn()
     // ... (other inserts)
     .insert(
-        StateMachine::new(my_initial_state)
-            .trans::<MyState1>(my_trigger_1, my_state_4)
-            .trans::<MyState2>(my_trigger_2, my_state_5)
-            .trans::<MyState3>(my_trigger_3, my_state_6)
+        StateMachine::new((my_initial_state,))
+            .trans::<(MyState1,)>(my_trigger_1, (my_state_4,))
+            .trans::<(MyState2,)>(my_trigger_2, (my_state_5,))
+            .trans::<(MyState3,)>(my_trigger_3, (my_state_6,))
             // etc.
     );
 ```
@@ -64,7 +65,7 @@ got-jumped-on-by-player and waited-for-5-seconds, and unlike the dwarves in Dwar
 who weigh their options of what to do before taking an action.
 
 `seldom_state` is a finite state machine implementation, so it may not be suitable for all types
-of game AI. If you need a solution that with more complex states and transitions,
+of game AI. If you need a solution that works with more complex states and transitions,
 then you may want to implement
 [a behavior tree](https://www.gamedeveloper.com/programming/behavior-trees-for-ai-how-they-work)
 (I had little luck turning existing implementations into a Bevy plugin without forking them).
@@ -94,7 +95,7 @@ See the `chase.rs` example for futher usage.
 
 | Bevy | `seldom_state` |
 | ---- | -------------- |
-| 0.8  | 0.1            |
+| 0.8  | 0.1 - 0.2      |
 
 ## License
 

@@ -54,23 +54,23 @@ fn init(mut commands: Commands, asset_server: Res<AssetServer>) {
         .insert(
             // This state machine handles the enemy's transitions
             // The initial state is `Idle`
-            StateMachine::new(Idle)
+            StateMachine::new((Idle,))
                 // Add a transition
                 // When they're in `Idle` state, and the `near_player` trigger occurs,
                 // switch to that instance of the `Follow` state
-                .trans::<Idle>(
+                .trans::<(Idle,)>(
                     near_player,
                     // Transitions accept specific instances of states
-                    Follow {
+                    (Follow {
                         target: player,
                         speed: 100.,
-                    },
+                    },),
                 )
                 // Add a second transition
                 // When they're in the `Follow` state, and the `near_player` trigger
                 // does not occur, switch to the `Idle` state
                 // `NotTrigger` is a built-in trigger that negates the given trigger
-                .trans::<Follow>(NotTrigger(near_player), Idle),
+                .trans::<(Follow,)>(NotTrigger(near_player), (Idle,)),
         );
 }
 
@@ -113,7 +113,8 @@ impl Trigger for Near {
 }
 
 // Now let's define our states!
-// States must implement `Clone`, `Component`, and `Reflect`
+// States must implement `Bundle`, `Clone`, and `Reflect`
+// To use a `Component` as a `Bundle`, just put it in a tuple, like so: `(my_component,)`
 // `MachineState` is implemented automatically for valid states
 // If necessary, you may use `#[reflect(ignore)]` on fields that cannot be reflected
 // Consider annotating your states with `#[component(storage = "SparseSet")]`

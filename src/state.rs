@@ -47,9 +47,9 @@ use crate::prelude::*;
 ///
 /// If you are concerned with performance, I recommend having your states use sparse set storage,
 /// since they may be added to and removed from entities.
-pub trait MachineState: 'static + Clone + Component + Reflect + Send + Sync {}
+pub trait MachineState: 'static + Bundle + Clone + Reflect + Send + Sync {}
 
-impl<T: 'static + Clone + Component + Reflect + Send + Sync> MachineState for T {}
+impl<T: 'static + Bundle + Clone + Reflect + Send + Sync> MachineState for T {}
 
 pub(crate) trait StateTransition: 'static + Reflect + Send + Sync {
     fn insert(&self, entity: &mut EntityCommands);
@@ -65,11 +65,11 @@ impl Debug for dyn StateTransition {
 
 impl<T: MachineState> StateTransition for T {
     fn insert(&self, entity: &mut EntityCommands) {
-        entity.insert(self.clone());
+        entity.insert_bundle(self.clone());
     }
 
     fn remove(&self, entity: &mut EntityCommands) {
-        entity.remove::<T>();
+        entity.remove_bundle::<T>();
     }
 
     fn dyn_clone(&self) -> Box<dyn StateTransition> {

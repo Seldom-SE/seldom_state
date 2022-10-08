@@ -47,7 +47,7 @@ impl Transitions {
     }
 }
 
-/// State machine component. Entities with this component will have components (the states)
+/// State machine component. Entities with this component will have bundles (the states)
 /// added and removed based on the transitions that you add. Build one with [`StateMachine::new()`]
 /// and [`StateMachine::trans()`].
 #[derive(Component, Debug)]
@@ -118,9 +118,9 @@ impl StateMachine {
     /// # #[derive(Clone, Component, Reflect)]
     /// # struct SwingSword;
     /// #
-    /// StateMachine::new(Idle)
-    ///     .trans::<Idle>(PressA, Jump)
-    ///     .trans::<Idle>(PressA, SwingSword); // Panic!
+    /// StateMachine::new((Idle,))
+    ///     .trans::<(Idle,)>(PressA, (Jump,))
+    ///     .trans::<(Idle,)>(PressA, (SwingSword,)); // Panic!
     /// ```
     pub fn trans<S: MachineState>(
         mut self,
