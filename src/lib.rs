@@ -3,6 +3,7 @@
 
 #![warn(missing_docs)]
 
+mod bundle;
 mod machine;
 pub mod stage;
 mod state;
@@ -54,4 +55,5 @@ pub mod prelude {
         },
         StateMachinePlugin,
     };
+    pub use bevy::{ecs::system::StaticSystemParam, reflect::FromReflect};
 }

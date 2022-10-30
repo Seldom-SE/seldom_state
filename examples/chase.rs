@@ -2,12 +2,8 @@
 // to the enemy, the enemy moves towards them, until the player moves back out of range
 
 use bevy::{
-    ecs::system::{
-        lifetimeless::{SQuery, SRes},
-        StaticSystemParam,
-    },
+    ecs::system::lifetimeless::{SQuery, SRes},
     prelude::*,
-    reflect::FromReflect,
 };
 use seldom_state::prelude::*;
 

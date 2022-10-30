@@ -1,5 +1,15 @@
 # Changelog
 
+## 0.2.1 (2022-10-30)
+
+### Added
+
+- `StateMachine::insert_on_enter` configures the `StateMachine` to insert a bundle
+when entering a state
+- `StateMachine::remove_on_exit` configures the `StateMachine` to remove a bundle
+when exiting a state
+- `StaticSystemParam` and `FromReflect` are re-exported in `prelude`
+
 ## 0.2 (2022-10-07)
 
 ### Added

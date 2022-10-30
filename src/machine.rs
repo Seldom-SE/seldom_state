@@ -2,7 +2,12 @@ use std::any::{type_name, TypeId};
 
 use bevy::utils::HashMap;
 
-use crate::{prelude::*, stage::StateStage, state::StateTransition};
+use crate::{
+    bundle::{Insert, Removable, Remove},
+    prelude::*,
+    stage::StateStage,
+    state::StateTransition,
+};
 
 pub(crate) fn machine_plugin(app: &mut App) {
     app.add_system_to_stage(StateStage::Transition, transition);
@@ -20,7 +25,7 @@ impl Clone for Transition {
         Self {
             marked: self.marked,
             trigger: self.trigger.clone_value(),
-            state: self.state.dyn_clone(),
+            state: StateTransition::dyn_clone(&*self.state),
         }
     }
 }
@@ -40,28 +45,62 @@ impl Transitions {
         self.transitions.push(Transition {
             marked: false,
             trigger: trigger.as_reflect().clone_value(),
-            state: state.dyn_clone(),
+            state: StateTransition::dyn_clone(&state),
         });
 
         Ok(())
     }
 }
 
+#[derive(Debug, Default)]
+struct StateMetadata {
+    transitions: Transitions,
+    inserts: Vec<Box<dyn Insert>>,
+    removes: Vec<Box<dyn Remove>>,
+}
+
+impl Clone for StateMetadata {
+    fn clone(&self) -> Self {
+        Self {
+            transitions: self.transitions.clone(),
+            inserts: self
+                .inserts
+                .iter()
+                .map(|insert| insert.dyn_clone())
+                .collect(),
+            removes: self
+                .removes
+                .iter()
+                .map(|remove| remove.dyn_clone())
+                .collect(),
+        }
+    }
+}
+
 /// State machine component. Entities with this component will have bundles (the states)
-/// added and removed based on the transitions that you add. Build one with [`StateMachine::new()`]
-/// and [`StateMachine::trans()`].
+/// added and removed based on the transitions that you add. Build one
+/// with [`StateMachine::new()`], [`StateMachine::trans()`], and other methods.
 #[derive(Component, Debug)]
 pub struct StateMachine {
     current: Option<Box<dyn StateTransition>>,
     transitions: Transitions,
-    states: HashMap<TypeId, Transitions>,
+    removes: Vec<Box<dyn Remove>>,
+    states: HashMap<TypeId, StateMetadata>,
 }
 
 impl Clone for StateMachine {
     fn clone(&self) -> Self {
         Self {
-            current: self.current.as_ref().map(|current| current.dyn_clone()),
+            current: self
+                .current
+                .as_ref()
+                .map(|current| StateTransition::dyn_clone(&**current)),
             transitions: self.transitions.clone(),
+            removes: self
+                .removes
+                .iter()
+                .map(|remove| remove.dyn_clone())
+                .collect(),
             states: self.states.clone(),
         }
     }
@@ -77,6 +116,7 @@ impl StateMachine {
         Self {
             current: None,
             transitions,
+            removes: default(),
             states: default(),
         }
     }
@@ -134,6 +174,7 @@ impl StateMachine {
             .states
             .entry(TypeId::of::<S>())
             .or_default()
+            .transitions
             .add(trigger, state)
         {
             panic!(
@@ -144,6 +185,30 @@ impl StateMachine {
                 self.transitions.transitions[index].state.type_name()
             )
         }
+
+        self
+    }
+
+    /// Adds an on-enter event to the state machine. Whenever the state machine transitions
+    /// into the given state, it will insert the given bundle into the entity.
+    pub fn insert_on_enter<S: MachineState>(mut self, bundle: impl Insert) -> Self {
+        self.states
+            .entry(TypeId::of::<S>())
+            .or_default()
+            .inserts
+            .push(Box::new(bundle));
+
+        self
+    }
+
+    /// Adds an on-exit event to the state machine. Whenever the state machine transitions
+    /// from the given state, it will remove the given bundle from the entity.
+    pub fn remove_on_exit<S: MachineState, B: Bundle>(mut self) -> Self {
+        self.states
+            .entry(TypeId::of::<S>())
+            .or_default()
+            .removes
+            .push(Box::new(B::remover()));
 
         self
     }
@@ -175,10 +240,27 @@ fn transition(mut commands: Commands, mut machines: Query<(Entity, &mut StateMac
                 current.remove(&mut entity);
             }
 
+            for remove in &machine.removes {
+                remove.remove(&mut entity);
+            }
+
             state.insert(&mut entity);
-            let transitions = machine.states[&state.type_id()].clone();
-            machine.current = Some(state.dyn_clone());
+            let metadata = &machine.states[&state.type_id()];
+
+            for insert in &metadata.inserts {
+                insert.insert(&mut entity);
+            }
+
+            let transitions = metadata.transitions.clone();
+            let removes = metadata
+                .removes
+                .iter()
+                .map(|remove| remove.dyn_clone())
+                .collect();
+
+            machine.current = Some(StateTransition::dyn_clone(&**state));
             machine.transitions = transitions;
+            machine.removes = removes;
         }
     }
 }

@@ -27,6 +27,8 @@ commands.spawn()
             .trans::<(MyState1,)>(my_trigger_1, (my_state_4,))
             .trans::<(MyState2,)>(my_trigger_2, (my_state_5,))
             .trans::<(MyState3,)>(my_trigger_3, (my_state_6,))
+            .insert_on_enter::<(MyState7,)>(my_bundle)
+            .remove_on_exit::<(MyState7,), MyBundle>()
             // etc.
     );
 ```
@@ -43,11 +45,15 @@ need improvement, feel free to submit an issue or pr!
     * `AlwaysTrigger`: always triggers
     * `NotTrigger`: contains a trigger, which it negates
     * `DoneTrigger`: triggers when the user adds the `Done` component to the entity
+* Automatically insert bundles upon entering a state, and remove others upon exiting
+(`StateMachine::insert_on_enter` and `StateMachine::remove_on_exit`)
 
 ## Future Work
 
 - [ ] Dataflow from triggers to states using state builders (I will probably implement this myself)
 - [ ] Transitions that can transition from any state (I will probably implement this myself)
+- [X] Automatically insert bundle on transition
+- [ ] Built-in timer trigger (I might implement this, and definitely want it)
 - [ ] More flexible, composable triggers, such as `And<A: Trigger, B: Trigger>(A, B)` (I might
 implement this, and definitely want it)
 - [ ] Multiple state machines on an entity (I probably won't implement this, and am still debating
