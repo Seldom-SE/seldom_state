@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.2.2 (2022-11-07)
+
+### Changed
+
+- Creating multiple transitions from the same `MachineState` and `Trigger` type doesn't panic
+
 ## 0.2.1 (2022-10-30)
 
 ### Added

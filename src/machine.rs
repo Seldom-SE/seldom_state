@@ -1,4 +1,4 @@
-use std::any::{type_name, TypeId};
+use std::any::TypeId;
 
 use bevy::utils::HashMap;
 
@@ -32,23 +32,25 @@ impl Clone for Transition {
 
 #[derive(Clone, Debug, Default)]
 struct Transitions {
-    transitions: Vec<Transition>,
+    transitions: Vec<Vec<Transition>>,
     trigger_indices: HashMap<TypeId, usize>,
 }
 
 impl Transitions {
-    fn add(&mut self, trigger: impl Trigger, state: impl MachineState) -> Result<(), usize> {
-        self.trigger_indices
-            .insert(trigger.type_id(), self.transitions.len())
-            .map_or_else(|| Ok(()), Err)?;
-
-        self.transitions.push(Transition {
+    fn add(&mut self, trigger: impl Trigger, state: impl MachineState) {
+        let type_id = trigger.type_id();
+        let transition = Transition {
             marked: false,
             trigger: trigger.as_reflect().clone_value(),
             state: StateTransition::dyn_clone(&state),
-        });
+        };
 
-        Ok(())
+        if let Some(index) = self.trigger_indices.get(&type_id) {
+            self.transitions[*index].push(transition);
+        } else {
+            self.trigger_indices.insert(type_id, self.transitions.len());
+            self.transitions.push(vec![transition])
+        }
     }
 }
 
@@ -111,7 +113,7 @@ impl StateMachine {
     /// with [`StateMachine::trans()`].
     pub fn new(initial: impl MachineState) -> Self {
         let mut transitions = Transitions::default();
-        transitions.add(AlwaysTrigger, initial).unwrap();
+        transitions.add(AlwaysTrigger, initial);
 
         Self {
             current: None,
@@ -124,67 +126,16 @@ impl StateMachine {
     /// Adds a transition to the state machine. When the entity is in the state
     /// given as a type parameter, and the given trigger occurs, it will transition
     /// to the state given as a function parameter.
-    ///
-    /// # Panics
-    ///
-    /// Panics when attempting to add a transition from a state and on a trigger
-    /// for which there is already a state to transition to. For example, the following code panics:
-    ///
-    /// ```should_panic
-    /// # use bevy::{
-    /// #     ecs::system::StaticSystemParam,
-    /// #     prelude::*,
-    /// #     reflect::FromReflect,
-    /// # };
-    /// # use seldom_state::prelude::*;
-    /// #
-    /// # #[derive(Clone, Component, Reflect)]
-    /// # struct Idle;
-    /// #
-    /// # #[derive(FromReflect, Reflect)]
-    /// # struct PressA;
-    /// #
-    /// # impl Trigger for PressA {
-    /// #     type Param = ();
-    /// #
-    /// #     fn trigger(&self, _: Entity, _: &StaticSystemParam<Self::Param>) -> bool {
-    /// #         true
-    /// #     }
-    /// # }
-    /// #
-    /// # #[derive(Clone, Component, Reflect)]
-    /// # struct Jump;
-    /// #
-    /// # #[derive(Clone, Component, Reflect)]
-    /// # struct SwingSword;
-    /// #
-    /// StateMachine::new((Idle,))
-    ///     .trans::<(Idle,)>(PressA, (Jump,))
-    ///     .trans::<(Idle,)>(PressA, (SwingSword,)); // Panic!
-    /// ```
     pub fn trans<S: MachineState>(
         mut self,
         trigger: impl Trigger,
         state: impl MachineState,
     ) -> Self {
-        let trigger_type = String::from(trigger.type_name());
-        let state_type = String::from(state.type_name());
-
-        if let Err(index) = self
-            .states
+        self.states
             .entry(TypeId::of::<S>())
             .or_default()
             .transitions
-            .add(trigger, state)
-        {
-            panic!(
-                "attempted to add a transition from {} on {} to {} when one already existed to {}",
-                type_name::<S>(),
-                trigger_type,
-                state_type,
-                self.transitions.transitions[index].state.type_name()
-            )
-        }
+            .add(trigger, state);
 
         self
     }
@@ -213,16 +164,22 @@ impl StateMachine {
         self
     }
 
-    pub(crate) fn get_trigger<T: Trigger>(&self) -> Option<T> {
+    pub(crate) fn get_triggers<T: Trigger>(&self) -> impl IntoIterator<Item = T> {
         self.transitions
             .trigger_indices
             .get(&TypeId::of::<T>())
-            .map(|index| T::from_reflect(&*self.transitions.transitions[*index].trigger).unwrap())
+            .map(|index| {
+                self.transitions.transitions[*index]
+                    .iter()
+                    .map(|transition| T::from_reflect(&*transition.trigger).unwrap())
+                    .collect::<Vec<_>>()
+            })
+            .unwrap_or_default()
     }
 
-    pub(crate) fn mark_trigger<T: Trigger>(&mut self) {
-        self.transitions.transitions[self.transitions.trigger_indices[&TypeId::of::<T>()]].marked =
-            true;
+    pub(crate) fn mark_trigger<T: Trigger>(&mut self, index: usize) {
+        self.transitions.transitions[self.transitions.trigger_indices[&TypeId::of::<T>()]][index]
+            .marked = true;
     }
 }
 
@@ -232,6 +189,7 @@ fn transition(mut commands: Commands, mut machines: Query<(Entity, &mut StateMac
             .transitions
             .transitions
             .iter()
+            .flatten()
             .find_map(|transition| transition.marked.then_some(&transition.state))
         {
             let mut entity = commands.entity(entity);

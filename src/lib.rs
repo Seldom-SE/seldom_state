@@ -12,6 +12,7 @@ mod trigger;
 use machine::machine_plugin;
 use prelude::*;
 use stage::StateStage;
+use trigger::trigger_plugin_internal;
 
 /// Add to your app to use this crate.
 #[derive(Debug, Default)]
@@ -36,8 +37,7 @@ pub fn state_machine_plugin(app: &mut App) {
         StateStage::Transition,
         SystemStage::parallel(),
     )
-    .fn_plugin(trigger_plugin::<AlwaysTrigger>)
-    .fn_plugin(trigger_plugin::<DoneTrigger>)
+    .fn_plugin(trigger_plugin_internal)
     .fn_plugin(machine_plugin);
 }
 

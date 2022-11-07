@@ -32,7 +32,12 @@ impl<T: Trigger> Default for TriggerPlugin<T> {
 /// or use `seldom_fn_plugin`, which is another crate I maintain.
 pub fn trigger_plugin<T: Trigger>(app: &mut App) {
     app.add_system_to_stage(StateStage::Trigger, check_trigger::<T>)
-        .add_system_to_stage(StateStage::Trigger, check_trigger::<NotTrigger<T>>)
+        .add_system_to_stage(StateStage::Trigger, check_trigger::<NotTrigger<T>>);
+}
+
+pub(crate) fn trigger_plugin_internal(app: &mut App) {
+    app.fn_plugin(trigger_plugin::<AlwaysTrigger>)
+        .fn_plugin(trigger_plugin::<DoneTrigger>)
         .add_system_to_stage(StateStage::Transition, remove_done_markers);
 }
 
@@ -134,9 +139,9 @@ fn check_trigger<T: Trigger>(
     param: StaticSystemParam<T::Param>,
 ) {
     for (entity, mut machine) in &mut machines {
-        if let Some(trigger) = machine.get_trigger::<T>() {
+        for (i, trigger) in machine.get_triggers::<T>().into_iter().enumerate() {
             if trigger.trigger(entity, &param) {
-                machine.mark_trigger::<T>();
+                machine.mark_trigger::<T>(i);
             }
         }
     }
