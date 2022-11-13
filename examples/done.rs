@@ -3,11 +3,7 @@
 // `chase.rs` is a better example to start with
 // Admittedly, this example exposes some current limitations of this crate, which I will point out
 
-use bevy::{
-    ecs::system::{lifetimeless::SRes, StaticSystemParam},
-    prelude::*,
-    reflect::FromReflect,
-};
+use bevy::{prelude::*, reflect::FromReflect};
 use seldom_state::prelude::*;
 
 fn main() {
@@ -24,36 +20,33 @@ fn main() {
 }
 
 fn init(mut commands: Commands, asset_server: Res<AssetServer>) {
-    commands.spawn_bundle(Camera2dBundle::default());
+    commands.spawn(Camera2dBundle::default());
 
-    let go_to_selection = (GoToSelection::new(200.),);
+    let go_to_selection = GoToSelection::new(200.);
 
-    commands
-        .spawn_bundle(SpriteBundle {
+    commands.spawn((
+        SpriteBundle {
             texture: asset_server.load("player.png"),
             ..default()
-        })
-        .insert(Player)
-        .insert(
-            StateMachine::new((Idle,))
-                // When the player clicks, go there
-                .trans::<(Idle,)>(Click, go_to_selection)
-                .trans::<(GoToSelection,)>(Click, go_to_selection)
-                // `DoneTrigger` triggers when the `Done` component is added to the entity
-                // When they're done going to the selection, idle
-                .trans::<(GoToSelection,)>(DoneTrigger::success(), (Idle,)),
-        );
+        },
+        Player,
+        StateMachine::new(Idle)
+            // When the player clicks, go there
+            .trans::<Idle>(Click, go_to_selection)
+            .trans::<GoToSelection>(Click, go_to_selection)
+            // `DoneTrigger` triggers when the `Done` component is added to the entity
+            // When they're done going to the selection, idle
+            .trans::<GoToSelection>(DoneTrigger::Success, Idle),
+    ));
 }
 
 #[derive(FromReflect, Reflect)]
 struct Click;
 
 impl Trigger for Click {
-    type Param = (SRes<Input<MouseButton>>, SRes<CursorPosition>);
+    type Param<'w, 's> = (Res<'w, Input<MouseButton>>, Res<'w, CursorPosition>);
 
-    fn trigger(&self, _: Entity, param: &StaticSystemParam<Self::Param>) -> bool {
-        let (mouse, cursor_position) = &**param;
-
+    fn trigger(&self, _: Entity, (mouse, cursor_position): &Self::Param<'_, '_>) -> bool {
         mouse.just_pressed(MouseButton::Left) && cursor_position.is_some()
     }
 }
@@ -107,7 +100,7 @@ fn go_to_target(
             // The player has reached the target!
             // Add the `Done` component to the player, causing `DoneTrigger` to trigger
             // It will be automatically removed later this frame
-            commands.entity(entity).insert(Done::success());
+            commands.entity(entity).insert(Done::Success);
             info!("Done!")
         } else {
             transform.translation += movement;
@@ -121,7 +114,7 @@ fn go_to_target(
 #[derive(Component)]
 struct Player;
 
-#[derive(Default, Deref, DerefMut)]
+#[derive(Default, Deref, DerefMut, Resource)]
 struct CursorPosition(Option<Vec2>);
 
 fn update_cursor_position(

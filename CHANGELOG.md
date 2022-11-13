@@ -1,5 +1,21 @@
 # Changelog
 
+## 0.3 (2022-11-12)
+
+### Changed
+
+- Updated `bevy` to 0.9
+- `Trigger::Param<'w, 's>` has lifetime parameters
+- `Trigger::trigger` accepts `&Self::Param::Fetch::Item`
+instead of `&StaticSystemParam<Self::Param>`
+- `Done` and `DoneTrigger` are enums with `Success` and `Failure` variants
+
+### Removed
+
+- `StaticSystemParam` re-export from `prelude`
+- `Done::success()` and `Done::failure()` constructors
+- `DoneTrigger::success()` and `DoneTrigger::failure()` constructors
+
 ## 0.2.2 (2022-11-07)
 
 ### Changed

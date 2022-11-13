@@ -185,40 +185,40 @@ impl StateMachine {
 
 fn transition(mut commands: Commands, mut machines: Query<(Entity, &mut StateMachine)>) {
     for (entity, mut machine) in &mut machines {
-        if let Some(state) = machine
+        let Some(state) = machine
             .transitions
             .transitions
             .iter()
             .flatten()
             .find_map(|transition| transition.marked.then_some(&transition.state))
-        {
-            let mut entity = commands.entity(entity);
+        else { continue };
 
-            if let Some(current) = &machine.current {
-                current.remove(&mut entity);
-            }
+        let mut entity = commands.entity(entity);
 
-            for remove in &machine.removes {
-                remove.remove(&mut entity);
-            }
-
-            state.insert(&mut entity);
-            let metadata = &machine.states[&state.type_id()];
-
-            for insert in &metadata.inserts {
-                insert.insert(&mut entity);
-            }
-
-            let transitions = metadata.transitions.clone();
-            let removes = metadata
-                .removes
-                .iter()
-                .map(|remove| remove.dyn_clone())
-                .collect();
-
-            machine.current = Some(StateTransition::dyn_clone(&**state));
-            machine.transitions = transitions;
-            machine.removes = removes;
+        if let Some(current) = &machine.current {
+            current.remove(&mut entity);
         }
+
+        for remove in &machine.removes {
+            remove.remove(&mut entity);
+        }
+
+        state.insert(&mut entity);
+        let metadata = &machine.states[&state.type_id()];
+
+        for insert in &metadata.inserts {
+            insert.insert(&mut entity);
+        }
+
+        let transitions = metadata.transitions.clone();
+        let removes = metadata
+            .removes
+            .iter()
+            .map(|remove| remove.dyn_clone())
+            .collect();
+
+        machine.current = Some(StateTransition::dyn_clone(&**state));
+        machine.transitions = transitions;
+        machine.removes = removes;
     }
 }

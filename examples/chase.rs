@@ -1,10 +1,7 @@
 // In this game, the player moves around in 2D with the arrow keys, but if they get too close
 // to the enemy, the enemy moves towards them, until the player moves back out of range
 
-use bevy::{
-    ecs::system::lifetimeless::{SQuery, SRes},
-    prelude::*,
-};
+use bevy::prelude::*;
 use seldom_state::prelude::*;
 
 fn main() {
@@ -23,15 +20,17 @@ fn main() {
 
 // Setup the game
 fn init(mut commands: Commands, asset_server: Res<AssetServer>) {
-    commands.spawn_bundle(Camera2dBundle::default());
+    commands.spawn(Camera2dBundle::default());
 
     // Simple player entity
     let player = commands
-        .spawn_bundle(SpriteBundle {
-            texture: asset_server.load("player.png"),
-            ..default()
-        })
-        .insert(Player)
+        .spawn((
+            SpriteBundle {
+                texture: asset_server.load("player.png"),
+                ..default()
+            },
+            Player,
+        ))
         .id();
 
     // Since we use this trigger twice, let's declare it out here so we can reuse it
@@ -41,33 +40,32 @@ fn init(mut commands: Commands, asset_server: Res<AssetServer>) {
     };
 
     // The enemy
-    commands
-        .spawn_bundle(SpriteBundle {
+    commands.spawn((
+        SpriteBundle {
             transform: Transform::from_xyz(500., 0., 0.),
             texture: asset_server.load("enemy.png"),
             ..default()
-        })
-        .insert(
-            // This state machine handles the enemy's transitions
-            // The initial state is `Idle`
-            StateMachine::new((Idle,))
-                // Add a transition
-                // When they're in `Idle` state, and the `near_player` trigger occurs,
-                // switch to that instance of the `Follow` state
-                .trans::<(Idle,)>(
-                    near_player,
-                    // Transitions accept specific instances of states
-                    (Follow {
-                        target: player,
-                        speed: 100.,
-                    },),
-                )
-                // Add a second transition
-                // When they're in the `Follow` state, and the `near_player` trigger
-                // does not occur, switch to the `Idle` state
-                // `NotTrigger` is a built-in trigger that negates the given trigger
-                .trans::<(Follow,)>(NotTrigger(near_player), (Idle,)),
-        );
+        },
+        // This state machine handles the enemy's transitions
+        // The initial state is `Idle`
+        StateMachine::new(Idle)
+            // Add a transition
+            // When they're in `Idle` state, and the `near_player` trigger occurs,
+            // switch to that instance of the `Follow` state
+            .trans::<Idle>(
+                near_player,
+                // Transitions accept specific instances of states
+                Follow {
+                    target: player,
+                    speed: 100.,
+                },
+            )
+            // Add a second transition
+            // When they're in the `Follow` state, and the `near_player` trigger
+            // does not occur, switch to the `Idle` state
+            // `NotTrigger` is a built-in trigger that negates the given trigger
+            .trans::<Follow>(NotTrigger(near_player), Idle),
+    ));
 }
 
 // Let's define our trigger!
@@ -83,21 +81,19 @@ struct Near {
 
 impl Trigger for Near {
     // Put the parameters that your trigger needs here
-    // Use the `bevy_ecs::system::system_param::lifetimeless` variants of system params
-    // to avoid difficult lifetime errors (this may not be necessary in future versions of Rust)
+    // For concision, you may use `bevy_ecs::system::system_param::lifetimeless` variants of system
+    // params, like so:
+    // type Param<'w, 's> = (SQuery<&'static Transform>, SRes<Time>);
     // Triggers are immutable; you may not access system params mutably
     // Do not query for the `StateMachine` component. This, unfortunately, will panic.
     // `Time` is included here to demonstrate how to get multiple system params
-    type Param = (SQuery<&'static Transform>, SRes<Time>);
+    type Param<'w, 's> = (Query<'w, 's, &'static Transform>, Res<'w, Time>);
 
     // This function checks if the given entity should trigger
     // It runs once per frame for each entity that is in a state that can transition
     // on this trigger
     // Return `true` to trigger and `false` to not trigger
-    fn trigger(&self, entity: Entity, param: &StaticSystemParam<Self::Param>) -> bool {
-        // Here is how to extract your system parameters
-        let (transforms, _time) = &**param;
-
+    fn trigger(&self, entity: Entity, (transforms, _time): &Self::Param<'_, '_>) -> bool {
         // Find the displacement between the target and this entity
         let delta = transforms.get(self.target).unwrap().translation
             - transforms.get(entity).unwrap().translation;
@@ -110,7 +106,6 @@ impl Trigger for Near {
 
 // Now let's define our states!
 // States must implement `Bundle`, `Clone`, and `Reflect`
-// To use a `Component` as a `Bundle`, just put it in a tuple, like so: `(my_component,)`
 // `MachineState` is implemented automatically for valid states
 // If necessary, you may use `#[reflect(ignore)]` on fields that cannot be reflected
 // Consider annotating your states with `#[component(storage = "SparseSet")]`

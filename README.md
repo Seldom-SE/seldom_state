@@ -9,28 +9,26 @@ player state, and other entities that occupy various states. It allows for great
 of state logic between entities, compared to managing mutually-exclusive components directly
 in your systems.
 
-A *state* is a bundle (usually with one component) attached to an entity that defines
-its current behavior, such as `(Jumping,)` or `(Stunned,)`. A *trigger* is a type that checks
-information about entities in the world, such as `NearPosition` or `HealthBelowThreshold`.
-A *transition* links two states: one to transition from, and one to transition to;
-once a given trigger has occurred. A *state machine* is a component attached to an entity
-that keeps track of that entity's transitions, and automatically changes the entity's state
-according to those transitions.
+A *state* is a bundle attached to an entity that defines its current behavior, such as `Jumping`
+or `Stunned`. A *trigger* is a type that checks information about entities in the world,
+such as `NearPosition` or `HealthBelowThreshold`. A *transition* links two states:
+one to transition from, and one to transition to; once a given trigger has occurred.
+A *state machine* is a component attached to an entity that keeps track of that entity's
+transitions, and automatically changes the entity's state according to those transitions.
 
 State machines are created like so:
 
 ```Rust
-commands.spawn()
+commands.spawn((
     // ... (other inserts)
-    .insert(
-        StateMachine::new((my_initial_state,))
-            .trans::<(MyState1,)>(my_trigger_1, (my_state_4,))
-            .trans::<(MyState2,)>(my_trigger_2, (my_state_5,))
-            .trans::<(MyState3,)>(my_trigger_3, (my_state_6,))
-            .insert_on_enter::<(MyState7,)>(my_bundle)
-            .remove_on_exit::<(MyState7,), MyBundle>()
-            // etc.
-    );
+    StateMachine::new(my_initial_state)
+        .trans::<MyState1>(my_trigger_1, my_state_4)
+        .trans::<MyState2>(my_trigger_2, my_state_5)
+        .trans::<MyState3>(my_trigger_3, my_state_6)
+        .insert_on_enter::<MyState7>(my_bundle)
+        .remove_on_exit::<MyState7, MyBundle>()
+        // etc.
+));
 ```
 
 For more complete examples, see the `examples` directory. The `chase.rs` example is written
@@ -50,14 +48,18 @@ need improvement, feel free to submit an issue or pr!
 
 ## Future Work
 
+- [ ] Warn or panic when using a trigger whose plugin hasn't been added (I will probably implement
+this myself)
+- [ ] [`leafwing_input_manager`](https://github.com/Leafwing-Studios/leafwing-input-manager)
+integration (I will probably implement this myself)
 - [ ] Dataflow from triggers to states using state builders (I will probably implement this myself)
-- [ ] Transitions that can transition from any state (I will probably implement this myself)
+- [ ] Transitions that can transition from any state (I might implement this, and definitely want
+it)
 - [X] Automatically insert bundle on transition
-- [ ] Built-in timer trigger (I might implement this, and definitely want it)
+- [ ] Built-in timer trigger (I will probably implement this myself)
 - [ ] More flexible, composable triggers, such as `And<A: Trigger, B: Trigger>(A, B)` (I might
 implement this, and definitely want it)
-- [ ] Multiple state machines on an entity (I probably won't implement this, and am still debating
-whether I want it)
+- [ ] Multiple state machines on an entity (I might implement this, and probably want it)
 
 ## Comparison with [`big-brain`](https://github.com/zkat/big-brain)
 
@@ -101,6 +103,7 @@ See the `chase.rs` example for futher usage.
 
 | Bevy | `seldom_state` |
 | ---- | -------------- |
+| 0.9  | 0.3            |
 | 0.8  | 0.1 - 0.2      |
 
 ## License

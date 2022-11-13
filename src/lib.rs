@@ -55,5 +55,5 @@ pub mod prelude {
         },
         StateMachinePlugin,
     };
-    pub use bevy::{ecs::system::StaticSystemParam, reflect::FromReflect};
+    pub use bevy::reflect::FromReflect;
 }

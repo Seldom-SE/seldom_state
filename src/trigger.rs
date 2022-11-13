@@ -1,7 +1,7 @@
 use std::marker::PhantomData;
 
 use bevy::{
-    ecs::system::{lifetimeless::SQuery, StaticSystemParam, SystemParam},
+    ecs::system::{StaticSystemParam, SystemParam, SystemParamFetch},
     reflect::FromReflect,
 };
 
@@ -47,12 +47,19 @@ pub(crate) fn trigger_plugin_internal(app: &mut App) {
 /// for implementing this trait, since it can be tricky without direction.
 pub trait Trigger: 'static + FromReflect + Reflect + Send + Sync {
     /// System parameter provided to [`Trigger::trigger()`]. Must not access [`StateMachine`].
-    type Param: SystemParam;
+    type Param<'w, 's>: SystemParam;
 
     /// Called for every entity that may transition to a state on this trigger. Return `true`
-    /// if it should transition, and `false` if it should not.
-    // Maybe remove static typing when we get GATS
-    fn trigger(&self, entity: Entity, param: &StaticSystemParam<Self::Param>) -> bool;
+    /// if it should transition, and `false` if it should not. In most cases, you may use
+    /// `&Self::Param<'_, '_>` as `param`'s type.
+    fn trigger(
+        &self,
+        entity: Entity,
+        param: &<<<Self as Trigger>::Param<'_, '_> as SystemParam>::Fetch as SystemParamFetch<
+            '_,
+            '_,
+        >>::Item,
+    ) -> bool;
 }
 
 /// Trigger that always transitions
@@ -60,9 +67,9 @@ pub trait Trigger: 'static + FromReflect + Reflect + Send + Sync {
 pub struct AlwaysTrigger;
 
 impl Trigger for AlwaysTrigger {
-    type Param = ();
+    type Param<'w, 's> = ();
 
-    fn trigger(&self, _: Entity, _: &StaticSystemParam<Self::Param>) -> bool {
+    fn trigger(&self, _: Entity, _: &()) -> bool {
         true
     }
 }
@@ -73,9 +80,16 @@ impl Trigger for AlwaysTrigger {
 pub struct NotTrigger<T: Trigger>(pub T);
 
 impl<T: Trigger> Trigger for NotTrigger<T> {
-    type Param = T::Param;
+    type Param<'w, 's> = T::Param<'w, 's>;
 
-    fn trigger(&self, entity: Entity, param: &StaticSystemParam<Self::Param>) -> bool {
+    fn trigger(
+        &self,
+        entity: Entity,
+        param: &<<<Self as Trigger>::Param<'_, '_> as SystemParam>::Fetch as SystemParamFetch<
+            '_,
+            '_,
+        >>::Item,
+    ) -> bool {
         let NotTrigger(trigger) = self;
         !trigger.trigger(entity, param)
     }
@@ -83,60 +97,48 @@ impl<T: Trigger> Trigger for NotTrigger<T> {
 
 /// Marker component that represents that the current state has completed. Removed
 /// from every entity each frame after checking triggers. To be used with [`DoneTrigger`].
-/// In Bevy 0.9, this will be an enum with `Success` and `Failure` variants.
-#[derive(Component, Debug, Reflect)]
+#[derive(Component, Debug, Eq, PartialEq, Reflect)]
 #[component(storage = "SparseSet")]
-pub struct Done {
-    success: bool,
-}
-
-impl Done {
+pub enum Done {
     /// Success variant
-    pub fn success() -> Self {
-        Self { success: true }
-    }
-
+    Success,
     /// Failure variant
-    pub fn failure() -> Self {
-        Self { success: false }
-    }
+    Failure,
 }
 
 /// Trigger that transitions if the entity has the [`Done`] component
-/// with the associated `success` value. In Bevy 0.9,
-/// this will be an enum with `Success` and `Failure` variants.
-// TODO variants
+/// with the associated variant.
 #[derive(Debug, FromReflect, Reflect)]
-pub struct DoneTrigger {
-    success: bool,
+pub enum DoneTrigger {
+    /// Success variant
+    Success,
+    /// Failure variant
+    Failure,
 }
 
 impl Trigger for DoneTrigger {
-    type Param = SQuery<&'static Done>;
+    type Param<'w, 's> = Query<'w, 's, &'static Done>;
 
-    fn trigger(&self, entity: Entity, param: &StaticSystemParam<Self::Param>) -> bool {
+    fn trigger(&self, entity: Entity, param: &Self::Param<'_, '_>) -> bool {
         param
             .get(entity)
-            .map(|done| self.success == done.success)
+            .map(|done| self.as_done() == *done)
             .unwrap_or(false)
     }
 }
 
 impl DoneTrigger {
-    /// Success variant
-    pub fn success() -> Self {
-        Self { success: true }
-    }
-
-    /// Failure variant
-    pub fn failure() -> Self {
-        Self { success: false }
+    fn as_done(&self) -> Done {
+        match self {
+            Self::Success => Done::Success,
+            Self::Failure => Done::Failure,
+        }
     }
 }
 
 fn check_trigger<T: Trigger>(
     mut machines: Query<(Entity, &mut StateMachine)>,
-    param: StaticSystemParam<T::Param>,
+    param: StaticSystemParam<T::Param<'_, '_>>,
 ) {
     for (entity, mut machine) in &mut machines {
         for (i, trigger) in machine.get_triggers::<T>().into_iter().enumerate() {

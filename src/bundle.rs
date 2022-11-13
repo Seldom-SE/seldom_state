@@ -18,7 +18,7 @@ impl Debug for dyn Insert {
 
 impl<T: Bundle + Clone> Insert for T {
     fn insert(&self, entity: &mut EntityCommands) {
-        entity.insert_bundle(self.clone());
+        entity.insert(self.clone());
     }
 
     fn dyn_clone(&self) -> Box<dyn Insert> {
@@ -41,7 +41,7 @@ pub(crate) struct Remover<B: Bundle>(PhantomData<B>);
 
 impl<B: Bundle + Clone> Remove for B {
     fn remove(&self, entity: &mut EntityCommands) {
-        entity.remove_bundle::<B>();
+        entity.remove::<B>();
     }
 
     fn dyn_clone(&self) -> Box<dyn Remove> {
@@ -51,7 +51,7 @@ impl<B: Bundle + Clone> Remove for B {
 
 impl<B: Bundle> Remove for Remover<B> {
     fn remove(&self, entity: &mut EntityCommands) {
-        entity.remove_bundle::<B>();
+        entity.remove::<B>();
     }
 
     fn dyn_clone(&self) -> Box<dyn Remove> {
