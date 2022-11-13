@@ -6,10 +6,7 @@ use crate::{
 };
 
 /// Represents a state that an entity may be in. A state must implement [`Reflect`],
-/// but workarounds exist for structs that contain types that do not implement [`Reflect`]
-/// and for enums.
-///
-/// For non-[`Reflect`] types:
+/// but a workaround exists for structs that contain types that do not implement [`Reflect`].
 ///
 /// ```rust
 /// # use bevy::prelude::*;
@@ -25,26 +22,7 @@ use crate::{
 /// }
 /// ```
 ///
-/// And for enums:
-///
-/// ```rust
-/// # use bevy::prelude::*;
-/// #
-/// #[derive(Clone)]
-/// enum MyState {
-///     Variant1,
-///     Variant2,
-/// }
-///
-/// #[derive(Clone, Component, Reflect)]
-/// #[component(storage = "SparseSet")]
-/// struct MyStateWrapper {
-///     #[reflect(ignore)]
-///     non_reflect_type: MyState
-/// }
-/// ```
-///
-/// These workarounds currently do not affect the functionality of your state machine.
+/// This workaround currently does not affect the functionality of your state machine.
 ///
 /// If you are concerned with performance, consider having your states use sparse set storage,
 /// since they may be added to and removed from entities.
