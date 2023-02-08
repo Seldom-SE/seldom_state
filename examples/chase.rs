@@ -85,7 +85,7 @@ impl Trigger for Near {
     // params, like so:
     // type Param<'w, 's> = (SQuery<&'static Transform>, SRes<Time>);
     // Triggers are immutable; you may not access system params mutably
-    // Do not query for the `StateMachine` component. This, unfortunately, will panic.
+    // Do not query for the `StateMachine` component in this type. This, unfortunately, will panic.
     // `Time` is included here to demonstrate how to get multiple system params
     type Param<'w, 's> = (Query<'w, 's, &'static Transform>, Res<'w, Time>);
 

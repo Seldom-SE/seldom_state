@@ -48,6 +48,7 @@ need improvement, feel free to submit an issue or pr!
 
 ## Future Work
 
+- [ ] A more complex example featuring animations and input
 - [ ] Warn or panic when using a trigger whose plugin hasn't been added (I will probably implement
 this myself)
 - [ ] [`leafwing_input_manager`](https://github.com/Leafwing-Studios/leafwing-input-manager)
