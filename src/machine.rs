@@ -7,6 +7,7 @@ use crate::{
     prelude::*,
     stage::StateStage,
     state::StateTransition,
+    trigger::RegisteredTriggers,
 };
 
 pub(crate) fn machine_plugin(app: &mut App) {
@@ -30,9 +31,15 @@ impl Clone for Transition {
     }
 }
 
+#[derive(Clone, Debug)]
+struct TriggerTransitions {
+    transitions: Vec<Transition>,
+    name: String,
+}
+
 #[derive(Clone, Debug, Default)]
 struct Transitions {
-    transitions: Vec<Vec<Transition>>,
+    transitions: Vec<TriggerTransitions>,
     trigger_indices: HashMap<TypeId, usize>,
 }
 
@@ -46,10 +53,13 @@ impl Transitions {
         };
 
         if let Some(index) = self.trigger_indices.get(&type_id) {
-            self.transitions[*index].push(transition);
+            self.transitions[*index].transitions.push(transition);
         } else {
             self.trigger_indices.insert(type_id, self.transitions.len());
-            self.transitions.push(vec![transition])
+            self.transitions.push(TriggerTransitions {
+                transitions: vec![transition],
+                name: trigger.base_type_name().to_string(),
+            });
         }
     }
 }
@@ -164,12 +174,26 @@ impl StateMachine {
         self
     }
 
+    pub(crate) fn validate_triggers(&self, registered: &RegisteredTriggers) {
+        for state in self.states.values() {
+            for (trigger, index) in &state.transitions.trigger_indices {
+                if !registered.contains(trigger) {
+                    error!(
+                        "A `StateMachine` was created with an unregistered trigger: {}",
+                        state.transitions.transitions[*index].name
+                    );
+                }
+            }
+        }
+    }
+
     pub(crate) fn get_triggers<T: Trigger>(&self) -> impl IntoIterator<Item = T> {
         self.transitions
             .trigger_indices
             .get(&TypeId::of::<T>())
             .map(|index| {
                 self.transitions.transitions[*index]
+                    .transitions
                     .iter()
                     .map(|transition| T::from_reflect(&*transition.trigger).unwrap())
                     .collect::<Vec<_>>()
@@ -178,7 +202,8 @@ impl StateMachine {
     }
 
     pub(crate) fn mark_trigger<T: Trigger>(&mut self, index: usize) {
-        self.transitions.transitions[self.transitions.trigger_indices[&TypeId::of::<T>()]][index]
+        self.transitions.transitions[self.transitions.trigger_indices[&TypeId::of::<T>()]]
+            .transitions[index]
             .marked = true;
     }
 }
@@ -189,7 +214,7 @@ fn transition(mut commands: Commands, mut machines: Query<(Entity, &mut StateMac
             .transitions
             .transitions
             .iter()
-            .flatten()
+            .flat_map(|transitions| &transitions.transitions)
             .find_map(|transition| transition.marked.then_some(&transition.state))
         else { continue };
 

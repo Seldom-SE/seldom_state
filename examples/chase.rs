@@ -118,7 +118,7 @@ impl Trigger for Near {
 #[component(storage = "SparseSet")]
 struct Idle;
 
-// Entities is the `Follow` state should move towards the given entity at the given speed
+// Entities in the `Follow` state should move towards the given entity at the given speed
 #[derive(Clone, Component, Reflect)]
 #[component(storage = "SparseSet")]
 struct Follow {

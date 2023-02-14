@@ -1,4 +1,4 @@
-use std::marker::PhantomData;
+use std::{any::TypeId, marker::PhantomData};
 
 use bevy::{
     ecs::system::{StaticSystemParam, SystemParam, SystemParamFetch},
@@ -7,7 +7,8 @@ use bevy::{
 
 use crate::{prelude::*, stage::StateStage};
 
-/// Plugin that must be added for a trigger to be checked
+/// Plugin that must be added for a trigger to be checked. Also registers the [`NotTrigger<T>`]
+/// trigger.
 ///
 /// # Panics
 ///
@@ -32,12 +33,16 @@ impl<T: Trigger> Default for TriggerPlugin<T> {
 /// or use `seldom_fn_plugin`, which is another crate I maintain.
 pub fn trigger_plugin<T: Trigger>(app: &mut App) {
     app.add_system_to_stage(StateStage::Trigger, check_trigger::<T>)
-        .add_system_to_stage(StateStage::Trigger, check_trigger::<NotTrigger<T>>);
+        .add_system_to_stage(StateStage::Trigger, check_trigger::<NotTrigger<T>>)
+        .add_startup_system(register_trigger::<T>)
+        .add_startup_system(register_trigger::<NotTrigger<T>>);
 }
 
 pub(crate) fn trigger_plugin_internal(app: &mut App) {
     app.fn_plugin(trigger_plugin::<AlwaysTrigger>)
         .fn_plugin(trigger_plugin::<DoneTrigger>)
+        .init_resource::<RegisteredTriggers>()
+        .add_system(validate_triggers)
         .add_system_to_stage(StateStage::Transition, remove_done_markers);
 }
 
@@ -60,6 +65,11 @@ pub trait Trigger: 'static + FromReflect + Reflect + Send + Sync {
             '_,
         >>::Item,
     ) -> bool;
+
+    /// Get the name of the type, for use in logging. You probably should not override this.
+    fn base_type_name(&self) -> &str {
+        self.type_name()
+    }
 }
 
 /// Trigger that always transitions
@@ -92,6 +102,10 @@ impl<T: Trigger> Trigger for NotTrigger<T> {
     ) -> bool {
         let NotTrigger(trigger) = self;
         !trigger.trigger(entity, param)
+    }
+
+    fn base_type_name(&self) -> &str {
+        (**self).base_type_name()
     }
 }
 
@@ -133,6 +147,22 @@ impl DoneTrigger {
             Self::Success => Done::Success,
             Self::Failure => Done::Failure,
         }
+    }
+}
+
+#[derive(Default, Deref, DerefMut, Resource)]
+pub(crate) struct RegisteredTriggers(Vec<TypeId>);
+
+fn register_trigger<T: Trigger>(mut registered: ResMut<RegisteredTriggers>) {
+    registered.push(TypeId::of::<T>())
+}
+
+fn validate_triggers(
+    machines: Query<&StateMachine, Added<StateMachine>>,
+    registered: Res<RegisteredTriggers>,
+) {
+    for machine in &machines {
+        machine.validate_triggers(&registered)
     }
 }
 
