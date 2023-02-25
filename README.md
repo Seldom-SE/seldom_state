@@ -48,13 +48,11 @@ need improvement, feel free to submit an issue or pr!
 
 ## Future Work
 
-- [ ] A more complex example featuring animations and input
-- [X] Warn or panic when using a trigger whose plugin hasn't been added (I will probably implement
-this myself)
-- [ ] [`leafwing_input_manager`](https://github.com/Leafwing-Studios/leafwing-input-manager)
+- [X] Warn or panic when using a trigger whose plugin hasn't been added
+- [X] [`leafwing_input_manager`](https://github.com/Leafwing-Studios/leafwing-input-manager)
 integration (I will probably implement this myself)
-- [ ] Dataflow from triggers to states using state builders (I will probably implement this myself)
-- [ ] Transitions that can transition from any state (I might implement this, and definitely want
+- [X] Dataflow from triggers to states using state builders (I will probably implement this myself)
+- [X] Transitions that can transition from any state (I might implement this, and definitely want
 it)
 - [X] Automatically insert bundle on transition
 - [ ] Built-in timer trigger (I will probably implement this myself)

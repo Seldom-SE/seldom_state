@@ -6,8 +6,8 @@ use crate::{
     bundle::{Insert, Removable, Remove},
     prelude::*,
     stage::StateStage,
-    state::StateTransition,
-    trigger::RegisteredTriggers,
+    state::{AnyState, AsDynStateBuilderTypedBox, DynState, StateBuilder},
+    trigger::{DynTrigger, RegisteredTriggers},
 };
 
 pub(crate) fn machine_plugin(app: &mut App) {
@@ -15,18 +15,46 @@ pub(crate) fn machine_plugin(app: &mut App) {
 }
 
 #[derive(Debug)]
+enum TransitionTarget {
+    State(Box<dyn DynState>),
+    Builder(Box<dyn StateBuilder>),
+}
+
+impl Clone for TransitionTarget {
+    fn clone(&self) -> Self {
+        match self {
+            Self::State(state) => Self::State(DynState::dyn_clone(&**state)),
+            Self::Builder(builder) => Self::Builder(builder.dyn_clone()),
+        }
+    }
+}
+
+impl TransitionTarget {
+    fn state(
+        &self,
+        prev_state: Option<&dyn DynState>,
+        result: &dyn Reflect,
+    ) -> Option<Box<dyn DynState>> {
+        match self {
+            Self::State(state) => Some(DynState::dyn_clone(&**state)),
+            Self::Builder(builder) => builder.build(prev_state?, result),
+        }
+    }
+}
+
+#[derive(Debug)]
 struct Transition {
-    marked: bool,
-    trigger: Box<dyn Reflect>,
-    state: Box<dyn StateTransition>,
+    result: Option<Box<dyn Reflect>>,
+    trigger: Box<dyn DynTrigger>,
+    target: TransitionTarget,
 }
 
 impl Clone for Transition {
     fn clone(&self) -> Self {
         Self {
-            marked: self.marked,
-            trigger: self.trigger.clone_value(),
-            state: StateTransition::dyn_clone(&*self.state),
+            result: self.result.as_ref().map(|result| result.clone_value()),
+            trigger: self.trigger.dyn_clone(),
+            target: self.target.clone(),
         }
     }
 }
@@ -44,21 +72,27 @@ struct Transitions {
 }
 
 impl Transitions {
-    fn add(&mut self, trigger: impl Trigger, state: impl MachineState) {
-        let type_id = trigger.type_id();
+    fn add(
+        &mut self,
+        trigger: Box<dyn DynTrigger>,
+        trigger_id: TypeId,
+        trigger_name: String,
+        target: TransitionTarget,
+    ) {
         let transition = Transition {
-            marked: false,
-            trigger: trigger.as_reflect().clone_value(),
-            state: StateTransition::dyn_clone(&state),
+            result: None,
+            trigger,
+            target,
         };
 
-        if let Some(index) = self.trigger_indices.get(&type_id) {
+        if let Some(index) = self.trigger_indices.get(&trigger_id) {
             self.transitions[*index].transitions.push(transition);
         } else {
-            self.trigger_indices.insert(type_id, self.transitions.len());
+            self.trigger_indices
+                .insert(trigger_id, self.transitions.len());
             self.transitions.push(TriggerTransitions {
                 transitions: vec![transition],
-                name: trigger.base_type_name().to_string(),
+                name: trigger_name,
             });
         }
     }
@@ -94,7 +128,7 @@ impl Clone for StateMetadata {
 /// with [`StateMachine::new()`], [`StateMachine::trans()`], and other methods.
 #[derive(Component, Debug)]
 pub struct StateMachine {
-    current: Option<Box<dyn StateTransition>>,
+    current: Option<Box<dyn DynState>>,
     transitions: Transitions,
     removes: Vec<Box<dyn Remove>>,
     states: HashMap<TypeId, StateMetadata>,
@@ -106,7 +140,7 @@ impl Clone for StateMachine {
             current: self
                 .current
                 .as_ref()
-                .map(|current| StateTransition::dyn_clone(&**current)),
+                .map(|current| DynState::dyn_clone(&**current)),
             transitions: self.transitions.clone(),
             removes: self
                 .removes
@@ -123,7 +157,12 @@ impl StateMachine {
     /// with [`StateMachine::trans()`].
     pub fn new(initial: impl MachineState) -> Self {
         let mut transitions = Transitions::default();
-        transitions.add(AlwaysTrigger, initial);
+        transitions.add(
+            Box::new(AlwaysTrigger),
+            TypeId::of::<AlwaysTrigger>(),
+            AlwaysTrigger.base_type_name().to_string(),
+            TransitionTarget::State(Box::new(initial)),
+        );
 
         Self {
             current: None,
@@ -141,11 +180,42 @@ impl StateMachine {
         trigger: impl Trigger,
         state: impl MachineState,
     ) -> Self {
+        let trigger_id = trigger.type_id();
+        let name = trigger.base_type_name().to_string();
         self.states
             .entry(TypeId::of::<S>())
             .or_default()
             .transitions
-            .add(trigger, state);
+            .add(
+                Box::new(trigger),
+                trigger_id,
+                name,
+                TransitionTarget::State(Box::new(state)),
+            );
+
+        self
+    }
+
+    /// Adds a transition builder to the state machine. When the entity is in `P` state, and `T`
+    /// occurs, the given builder will be run on `T`'s `Result` type. If the builder returns
+    /// `Some(N)`, the machine will transition to that `N` state.
+    pub fn trans_builder<P: MachineState, T: Trigger, N: MachineState>(
+        mut self,
+        trigger: T,
+        builder: impl 'static + Clone + Fn(&P, &T::Ok) -> Option<N> + Send + Sync,
+    ) -> Self {
+        let trigger_id = trigger.type_id();
+        let name = trigger.base_type_name().to_string();
+        self.states
+            .entry(TypeId::of::<P>())
+            .or_default()
+            .transitions
+            .add(
+                Box::new(trigger),
+                trigger_id,
+                name,
+                TransitionTarget::Builder(Box::new(Box::new(builder).as_dyn_state_builder_typed())),
+            );
 
         self
     }
@@ -178,8 +248,8 @@ impl StateMachine {
         for state in self.states.values() {
             for (trigger, index) in &state.transitions.trigger_indices {
                 if !registered.contains(trigger) {
-                    error!(
-                        "A `StateMachine` was created with an unregistered trigger: {}",
+                    panic!(
+                        "a `StateMachine` was created with an unregistered trigger: {}",
                         state.transitions.transitions[*index].name
                     );
                 }
@@ -187,7 +257,7 @@ impl StateMachine {
         }
     }
 
-    pub(crate) fn get_triggers<T: Trigger>(&self) -> impl IntoIterator<Item = T> {
+    pub(crate) fn get_triggers<T: Trigger>(&self) -> impl IntoIterator<Item = &T> {
         self.transitions
             .trigger_indices
             .get(&TypeId::of::<T>())
@@ -195,27 +265,30 @@ impl StateMachine {
                 self.transitions.transitions[*index]
                     .transitions
                     .iter()
-                    .map(|transition| T::from_reflect(&*transition.trigger).unwrap())
+                    .map(|transition| transition.trigger.as_reflect().downcast_ref::<T>().unwrap())
                     .collect::<Vec<_>>()
             })
             .unwrap_or_default()
     }
 
-    pub(crate) fn mark_trigger<T: Trigger>(&mut self, index: usize) {
+    pub(crate) fn mark_trigger<T: Trigger>(&mut self, index: usize, result: T::Ok) {
         self.transitions.transitions[self.transitions.trigger_indices[&TypeId::of::<T>()]]
             .transitions[index]
-            .marked = true;
+            .result = Some(Box::new(result));
     }
 }
 
 fn transition(mut commands: Commands, mut machines: Query<(Entity, &mut StateMachine)>) {
     for (entity, mut machine) in &mut machines {
+        let current = machine.current.as_deref();
         let Some(state) = machine
             .transitions
             .transitions
             .iter()
             .flat_map(|transitions| &transitions.transitions)
-            .find_map(|transition| transition.marked.then_some(&transition.state))
+            .find_map(|transition| {
+                transition.result.as_ref().and_then(|result| transition.target.state(current, &**result))
+            })
         else { continue };
 
         let mut entity = commands.entity(entity);
@@ -229,20 +302,46 @@ fn transition(mut commands: Commands, mut machines: Query<(Entity, &mut StateMac
         }
 
         state.insert(&mut entity);
-        let metadata = &machine.states[&state.type_id()];
+        let default_metadata = StateMetadata::default();
+        let metadata = machine
+            .states
+            .get(&state.type_id())
+            .unwrap_or(&default_metadata);
+
+        let any_metadata = machine
+            .states
+            .get(&TypeId::of::<AnyState>())
+            .unwrap_or(&default_metadata);
+
+        for insert in &any_metadata.inserts {
+            insert.insert(&mut entity);
+        }
 
         for insert in &metadata.inserts {
             insert.insert(&mut entity);
         }
 
-        let transitions = metadata.transitions.clone();
+        let mut transitions = metadata.transitions.clone();
+        for (trigger_id, index) in &any_metadata.transitions.trigger_indices {
+            let trigger_transitions = &any_metadata.transitions.transitions[*index];
+            for transition in &trigger_transitions.transitions {
+                transitions.add(
+                    transition.trigger.dyn_clone(),
+                    *trigger_id,
+                    trigger_transitions.name.clone(),
+                    transition.target.clone(),
+                );
+            }
+        }
+
         let removes = metadata
             .removes
             .iter()
+            .chain(any_metadata.removes.iter())
             .map(|remove| remove.dyn_clone())
             .collect();
 
-        machine.current = Some(StateTransition::dyn_clone(&**state));
+        machine.current = Some(DynState::dyn_clone(&*state));
         machine.transitions = transitions;
         machine.removes = removes;
     }

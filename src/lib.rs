@@ -44,16 +44,24 @@ pub fn state_machine_plugin(app: &mut App) {
 /// Module for convenient imports. Use with `use seldom_state::prelude::*;`.
 pub mod prelude {
     pub(crate) use bevy::prelude::*;
+    #[cfg(feature = "leafwing_input")]
+    pub(crate) use leafwing_input_manager::prelude::*;
     pub(crate) use seldom_fn_plugin::FnPluginExt;
 
+    #[cfg(feature = "leafwing_input")]
+    pub use crate::trigger::{
+        input_trigger_plugin, ActionDataTrigger, AxisPairTrigger, ClampedAxisPairTrigger,
+        ClampedValueTrigger, InputTriggerPlugin, JustPressedTrigger, JustReleasedTrigger,
+        PressedTrigger, ReleasedTrigger, ValueTrigger,
+    };
     pub use crate::{
         machine::StateMachine,
-        state::MachineState,
+        state::{AnyState, MachineState},
         state_machine_plugin,
         trigger::{
-            trigger_plugin, AlwaysTrigger, Done, DoneTrigger, NotTrigger, Trigger, TriggerPlugin,
+            trigger_plugin, AlwaysTrigger, BoolTrigger, Done, DoneTrigger, Never, NotTrigger,
+            OptionTrigger, Trigger, TriggerPlugin,
         },
         StateMachinePlugin,
     };
-    pub use bevy::reflect::FromReflect;
 }

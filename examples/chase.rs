@@ -69,11 +69,11 @@ fn init(mut commands: Commands, asset_server: Res<AssetServer>) {
 }
 
 // Let's define our trigger!
-// Triggers must implement `FromReflect` and `Reflect`
+// Triggers must implement `Reflect`
 // `Clone` and `Copy` are not necessary, but it's nicer to do so here
 
 // This trigger checks if the entity is within the the given range of the target
-#[derive(Clone, Copy, FromReflect, Reflect)]
+#[derive(Clone, Copy, Reflect)]
 struct Near {
     target: Entity,
     range: f32,
@@ -88,19 +88,26 @@ impl Trigger for Near {
     // Do not query for the `StateMachine` component in this type. This, unfortunately, will panic.
     // `Time` is included here to demonstrate how to get multiple system params
     type Param<'w, 's> = (Query<'w, 's, &'static Transform>, Res<'w, Time>);
+    type Ok = f32;
+    type Err = f32;
 
     // This function checks if the given entity should trigger
     // It runs once per frame for each entity that is in a state that can transition
     // on this trigger
     // Return `true` to trigger and `false` to not trigger
-    fn trigger(&self, entity: Entity, (transforms, _time): &Self::Param<'_, '_>) -> bool {
+    fn trigger(
+        &self,
+        entity: Entity,
+        (transforms, _time): &Self::Param<'_, '_>,
+    ) -> Result<f32, f32> {
         // Find the displacement between the target and this entity
-        let delta = transforms.get(self.target).unwrap().translation
-            - transforms.get(entity).unwrap().translation;
+        let delta = transforms.get(self.target).unwrap().translation.truncate()
+            - transforms.get(entity).unwrap().translation.truncate();
 
         // Use the Pythagorean Theorem to determine whether the target is within range
         // If it is, return `true` to trigger!
-        delta.x * delta.x + delta.y * delta.y <= self.range * self.range
+        let distance = (delta.x * delta.x + delta.y * delta.y).sqrt();
+        (distance <= self.range).then_some(distance).ok_or(distance)
     }
 }
 

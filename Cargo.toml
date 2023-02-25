@@ -10,9 +10,20 @@ license = "MIT OR Apache-2.0"
 readme = "README.md"
 repository = "https://github.com/Seldom-SE/seldom_state"
 
+[features]
+default = [ "leafwing_input" ] # TEMP
+leafwing_input = [ "dep:leafwing-input-manager" ]
+
 [dependencies]
+as-dyn-trait = "0.2"
 bevy = { version = "0.9", default-features = false }
+leafwing-input-manager = { version = "0.8.0", default-features = false, optional = true }
 seldom_fn_plugin = "0.2"
 
 [dev-dependencies]
 bevy = "0.9"
+leafwing-input-manager = "0.8.0"
+
+[[example]]
+name = "input"
+required-features = [ "leafwing_input" ]

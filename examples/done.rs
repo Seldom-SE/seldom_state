@@ -1,9 +1,8 @@
 // In this game, you control the player by clicking where they should go
 // This is an example of how to use `DoneTrigger` and the `Done` component
 // `chase.rs` is a better example to start with
-// Admittedly, this example exposes some current limitations of this crate, which I will point out
 
-use bevy::{prelude::*, reflect::FromReflect};
+use bevy::prelude::*;
 use seldom_state::prelude::*;
 
 fn main() {
@@ -14,15 +13,12 @@ fn main() {
         .init_resource::<CursorPosition>()
         .add_startup_system(init)
         .add_system(update_cursor_position)
-        .add_system(find_target.after(update_cursor_position))
-        .add_system(go_to_target.after(find_target))
+        .add_system(go_to_target)
         .run();
 }
 
 fn init(mut commands: Commands, asset_server: Res<AssetServer>) {
     commands.spawn(Camera2dBundle::default());
-
-    let go_to_selection = GoToSelection::new(200.);
 
     commands.spawn((
         SpriteBundle {
@@ -32,22 +28,30 @@ fn init(mut commands: Commands, asset_server: Res<AssetServer>) {
         Player,
         StateMachine::new(Idle)
             // When the player clicks, go there
-            .trans::<Idle>(Click, go_to_selection)
-            .trans::<GoToSelection>(Click, go_to_selection)
+            .trans_builder(Click, |_: &AnyState, pos: &Vec2| {
+                Some(GoToSelection {
+                    speed: 200.,
+                    target: *pos,
+                })
+            })
             // `DoneTrigger` triggers when the `Done` component is added to the entity
             // When they're done going to the selection, idle
             .trans::<GoToSelection>(DoneTrigger::Success, Idle),
     ));
 }
 
-#[derive(FromReflect, Reflect)]
+#[derive(Clone, Reflect)]
 struct Click;
 
-impl Trigger for Click {
+impl OptionTrigger for Click {
     type Param<'w, 's> = (Res<'w, Input<MouseButton>>, Res<'w, CursorPosition>);
+    type Some = Vec2;
 
-    fn trigger(&self, _: Entity, (mouse, cursor_position): &Self::Param<'_, '_>) -> bool {
-        mouse.just_pressed(MouseButton::Left) && cursor_position.is_some()
+    fn trigger(&self, _: Entity, (mouse, cursor_position): &Self::Param<'_, '_>) -> Option<Vec2> {
+        mouse
+            .just_pressed(MouseButton::Left)
+            .then_some(())
+            .and(***cursor_position)
     }
 }
 
@@ -59,30 +63,7 @@ struct Idle;
 #[component(storage = "SparseSet")]
 struct GoToSelection {
     speed: f32,
-    // Limitation: since the state must be created when spawning the state machine, we don't know
-    // the target at the time of creating it. So, we must make the target field optional,
-    // or add the target as a separate component. I've done the former.
-    target: Option<Vec3>,
-}
-
-impl GoToSelection {
-    fn new(speed: f32) -> Self {
-        Self {
-            speed,
-            target: None,
-        }
-    }
-}
-
-fn find_target(
-    mut go_to_selections: Query<&mut GoToSelection, Added<GoToSelection>>,
-    cursor_position: Res<CursorPosition>,
-) {
-    for mut go_to_selection in &mut go_to_selections {
-        // Limitation: since the target is computed the frame after clicking, the target
-        // may be inaccurate
-        go_to_selection.target = Some(cursor_position.unwrap().extend(0.));
-    }
+    target: Vec2,
 }
 
 fn go_to_target(
@@ -91,19 +72,19 @@ fn go_to_target(
     time: Res<Time>,
 ) {
     for (entity, mut transform, go_to_selection) in &mut go_to_selections {
-        let target = go_to_selection.target.unwrap();
-        let delta = target - transform.translation;
+        let target = go_to_selection.target;
+        let delta = target - transform.translation.truncate();
         let movement = delta.normalize_or_zero() * go_to_selection.speed * time.delta_seconds();
 
         if movement.length() > delta.length() {
-            transform.translation = target;
+            transform.translation = target.extend(transform.translation.z);
             // The player has reached the target!
             // Add the `Done` component to the player, causing `DoneTrigger` to trigger
             // It will be automatically removed later this frame
             commands.entity(entity).insert(Done::Success);
             info!("Done!")
         } else {
-            transform.translation += movement;
+            transform.translation += movement.extend(0.);
         }
     }
 }
