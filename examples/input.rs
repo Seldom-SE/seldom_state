@@ -49,19 +49,14 @@ fn init(mut commands: Commands, asset_server: Res<AssetServer>) {
                     velocity: JUMP_VELOCITY,
                 },
             )
-            .trans_builder(GroundedTrigger, |falling: &Falling, _| {
-                (dbg!(falling.velocity) <= 0.).then_some(Grounded::Idle)
-            })
-            .trans_builder(
-                ValueTrigger::unbounded(Action::Move),
-                |_: &Grounded, &value| {
-                    Some(match value {
-                        value if value > 0.5 => Grounded::Right,
-                        value if value < -0.5 => Grounded::Left,
-                        _ => Grounded::Idle,
-                    })
-                },
-            ),
+            .trans::<Falling>(GroundedTrigger, Grounded::Idle)
+            .trans_builder::<Grounded, _, _>(ValueTrigger::unbounded(Action::Move), |&value| {
+                Some(match value {
+                    value if value > 0.5 => Grounded::Right,
+                    value if value < -0.5 => Grounded::Left,
+                    _ => Grounded::Idle,
+                })
+            }),
     ));
 }
 
@@ -75,11 +70,12 @@ enum Action {
 struct GroundedTrigger;
 
 impl BoolTrigger for GroundedTrigger {
-    type Param<'w, 's> = Query<'w, 's, &'static Transform>;
+    type Param<'w, 's> = Query<'w, 's, (&'static Transform, &'static Falling)>;
 
-    fn trigger(&self, entity: Entity, transforms: &Self::Param<'_, '_>) -> bool {
+    fn trigger(&self, entity: Entity, fallings: &Self::Param<'_, '_>) -> bool {
         // Find the displacement between the target and this entity
-        transforms.get(entity).unwrap().translation.y <= 0.
+        let (transform, falling) = fallings.get(entity).unwrap();
+        transform.translation.y <= 0. && falling.velocity <= 0.
     }
 }
 
@@ -112,6 +108,5 @@ fn fall(mut fallings: Query<(&mut Transform, &mut Falling)>, time: Res<Time>) {
         let dt = time.delta_seconds();
         falling.velocity += dt * GRAVITY;
         transform.translation.y += dt * falling.velocity;
-        println!("{}", falling.velocity);
     }
 }

@@ -59,6 +59,12 @@ impl<B: Bundle> Remove for Remover<B> {
     }
 }
 
+impl<B: Bundle> Default for Remover<B> {
+    fn default() -> Self {
+        Self(default())
+    }
+}
+
 pub(crate) trait Removable {
     type B: Bundle;
 

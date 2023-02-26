@@ -3,10 +3,10 @@ use std::any::TypeId;
 use bevy::utils::HashMap;
 
 use crate::{
-    bundle::{Insert, Removable, Remove},
+    bundle::{Insert, Removable, Remove, Remover},
     prelude::*,
     stage::StateStage,
-    state::{AnyState, AsDynStateBuilderTypedBox, DynState, StateBuilder},
+    state::{AsDynStateBuilderTypedBox, DynState, StateBuilder},
     trigger::{DynTrigger, RegisteredTriggers},
 };
 
@@ -30,14 +30,10 @@ impl Clone for TransitionTarget {
 }
 
 impl TransitionTarget {
-    fn state(
-        &self,
-        prev_state: Option<&dyn DynState>,
-        result: &dyn Reflect,
-    ) -> Option<Box<dyn DynState>> {
+    fn state(&self, result: &dyn Reflect) -> Option<Box<dyn DynState>> {
         match self {
             Self::State(state) => Some(DynState::dyn_clone(&**state)),
-            Self::Builder(builder) => builder.build(prev_state?, result),
+            Self::Builder(builder) => builder.build(result),
         }
     }
 }
@@ -98,7 +94,7 @@ impl Transitions {
     }
 }
 
-#[derive(Debug, Default)]
+#[derive(Debug)]
 struct StateMetadata {
     transitions: Transitions,
     inserts: Vec<Box<dyn Insert>>,
@@ -123,30 +119,33 @@ impl Clone for StateMetadata {
     }
 }
 
+impl StateMetadata {
+    fn new<S: Bundle>() -> Self {
+        Self {
+            transitions: default(),
+            inserts: default(),
+            removes: vec![Box::<Remover<S>>::default()],
+        }
+    }
+
+    fn new_from<S: Bundle>(_: &S) -> Self {
+        Self::new::<S>()
+    }
+}
+
 /// State machine component. Entities with this component will have bundles (the states)
 /// added and removed based on the transitions that you add. Build one
-/// with [`StateMachine::new()`], [`StateMachine::trans()`], and other methods.
+/// with [`StateMachine::new`], [`StateMachine::trans`], and other methods.
 #[derive(Component, Debug)]
 pub struct StateMachine {
-    current: Option<Box<dyn DynState>>,
-    transitions: Transitions,
-    removes: Vec<Box<dyn Remove>>,
+    current: Option<TypeId>,
     states: HashMap<TypeId, StateMetadata>,
 }
 
 impl Clone for StateMachine {
     fn clone(&self) -> Self {
         Self {
-            current: self
-                .current
-                .as_ref()
-                .map(|current| DynState::dyn_clone(&**current)),
-            transitions: self.transitions.clone(),
-            removes: self
-                .removes
-                .iter()
-                .map(|remove| remove.dyn_clone())
-                .collect(),
+            current: self.current,
             states: self.states.clone(),
         }
     }
@@ -154,10 +153,13 @@ impl Clone for StateMachine {
 
 impl StateMachine {
     /// Creates a state machine with an initial state and no transitions. Add more
-    /// with [`StateMachine::trans()`].
+    /// with [`StateMachine::trans`].
     pub fn new(initial: impl MachineState) -> Self {
-        let mut transitions = Transitions::default();
-        transitions.add(
+        let type_id = initial.type_id();
+        let metadata = StateMetadata::new_from(&initial);
+
+        let mut initial_metadata = StateMetadata::new::<()>();
+        initial_metadata.transitions.add(
             Box::new(AlwaysTrigger),
             TypeId::of::<AlwaysTrigger>(),
             AlwaysTrigger.base_type_name().to_string(),
@@ -166,10 +168,24 @@ impl StateMachine {
 
         Self {
             current: None,
-            transitions,
-            removes: default(),
-            states: default(),
+            states: vec![
+                (TypeId::of::<bool>(), initial_metadata),
+                (type_id, metadata),
+                (TypeId::of::<AnyState>(), StateMetadata::new::<()>()),
+            ]
+            .into_iter()
+            .collect(),
         }
+    }
+
+    fn register_state<S: MachineState>(&mut self) {
+        self.states
+            .entry(TypeId::of::<S>())
+            .or_insert(StateMetadata::new::<S>());
+    }
+
+    fn register_state_of<S: MachineState>(&mut self, _: &S) {
+        self.register_state::<S>();
     }
 
     /// Adds a transition to the state machine. When the entity is in the state
@@ -182,9 +198,11 @@ impl StateMachine {
     ) -> Self {
         let trigger_id = trigger.type_id();
         let name = trigger.base_type_name().to_string();
+
+        self.register_state_of(&state);
         self.states
             .entry(TypeId::of::<S>())
-            .or_default()
+            .or_insert(StateMetadata::new::<S>())
             .transitions
             .add(
                 Box::new(trigger),
@@ -202,13 +220,13 @@ impl StateMachine {
     pub fn trans_builder<P: MachineState, T: Trigger, N: MachineState>(
         mut self,
         trigger: T,
-        builder: impl 'static + Clone + Fn(&P, &T::Ok) -> Option<N> + Send + Sync,
+        builder: impl 'static + Clone + Fn(&T::Ok) -> Option<N> + Send + Sync,
     ) -> Self {
         let trigger_id = trigger.type_id();
         let name = trigger.base_type_name().to_string();
         self.states
             .entry(TypeId::of::<P>())
-            .or_default()
+            .or_insert(StateMetadata::new::<P>())
             .transitions
             .add(
                 Box::new(trigger),
@@ -216,6 +234,8 @@ impl StateMachine {
                 name,
                 TransitionTarget::Builder(Box::new(Box::new(builder).as_dyn_state_builder_typed())),
             );
+
+        self.register_state::<N>();
 
         self
     }
@@ -225,7 +245,7 @@ impl StateMachine {
     pub fn insert_on_enter<S: MachineState>(mut self, bundle: impl Insert) -> Self {
         self.states
             .entry(TypeId::of::<S>())
-            .or_default()
+            .or_insert(StateMetadata::new::<S>())
             .inserts
             .push(Box::new(bundle));
 
@@ -237,7 +257,7 @@ impl StateMachine {
     pub fn remove_on_exit<S: MachineState, B: Bundle>(mut self) -> Self {
         self.states
             .entry(TypeId::of::<S>())
-            .or_default()
+            .or_insert(StateMetadata::new::<S>())
             .removes
             .push(Box::new(B::remover()));
 
@@ -257,12 +277,28 @@ impl StateMachine {
         }
     }
 
-    pub(crate) fn get_triggers<T: Trigger>(&self) -> impl IntoIterator<Item = &T> {
-        self.transitions
+    fn current(&self) -> &StateMetadata {
+        &self.states[&self.current.unwrap_or(TypeId::of::<bool>())]
+    }
+
+    fn current_mut(&mut self) -> &mut StateMetadata {
+        self.states
+            .get_mut(&self.current.unwrap_or(TypeId::of::<bool>()))
+            .unwrap()
+    }
+
+    pub(crate) fn get_triggers<T: Trigger>(&self, any_state: bool) -> impl IntoIterator<Item = &T> {
+        let transitions = &match any_state {
+            true => self.states.get(&TypeId::of::<AnyState>()).unwrap(),
+            false => self.current(),
+        }
+        .transitions;
+
+        transitions
             .trigger_indices
             .get(&TypeId::of::<T>())
             .map(|index| {
-                self.transitions.transitions[*index]
+                transitions.transitions[*index]
                     .transitions
                     .iter()
                     .map(|transition| transition.trigger.as_reflect().downcast_ref::<T>().unwrap())
@@ -271,8 +307,25 @@ impl StateMachine {
             .unwrap_or_default()
     }
 
-    pub(crate) fn mark_trigger<T: Trigger>(&mut self, index: usize, result: T::Ok) {
-        self.transitions.transitions[self.transitions.trigger_indices[&TypeId::of::<T>()]]
+    pub(crate) fn mark_trigger<T: Trigger>(
+        &mut self,
+        index: usize,
+        result: T::Ok,
+        any_state: bool,
+    ) {
+        let transition = match any_state {
+            true => self.states.get(&TypeId::of::<AnyState>()).unwrap(),
+            false => self.current(),
+        }
+        .transitions
+        .trigger_indices[&TypeId::of::<T>()];
+
+        match any_state {
+            true => self.states.get_mut(&TypeId::of::<AnyState>()).unwrap(),
+            false => self.current_mut(),
+        }
+        .transitions
+        .transitions[transition]
             .transitions[index]
             .result = Some(Box::new(result));
     }
@@ -280,69 +333,69 @@ impl StateMachine {
 
 fn transition(mut commands: Commands, mut machines: Query<(Entity, &mut StateMachine)>) {
     for (entity, mut machine) in &mut machines {
-        let current = machine.current.as_deref();
         let Some(state) = machine
+            .current_mut()
             .transitions
             .transitions
-            .iter()
-            .flat_map(|transitions| &transitions.transitions)
+            .iter_mut()
+            .flat_map(|transitions| &mut transitions.transitions)
             .find_map(|transition| {
-                transition.result.as_ref().and_then(|result| transition.target.state(current, &**result))
+                let state = transition
+                    .result
+                    .as_ref()
+                    .and_then(|result| transition.target.state(&**result));
+                transition.result = None;
+                state
             })
-        else { continue };
+            .or_else(|| {
+                machine
+                    .states
+                    .get_mut(&TypeId::of::<AnyState>())
+                    .unwrap()
+                    .transitions
+                    .transitions
+                    .iter_mut()
+                    .flat_map(|transitions| &mut transitions.transitions)
+                    .find_map(|transition| {
+                        let state = transition
+                            .result
+                            .as_ref()
+                            .and_then(|result| transition.target.state(&**result));
+                        transition.result = None;
+                        state
+                    })
+            }) else { continue };
 
         let mut entity = commands.entity(entity);
 
-        if let Some(current) = &machine.current {
-            current.remove(&mut entity);
+        for remove in &machine.current().removes {
+            remove.remove(&mut entity);
         }
 
-        for remove in &machine.removes {
+        for remove in &machine
+            .states
+            .get(&TypeId::of::<AnyState>())
+            .unwrap()
+            .removes
+        {
             remove.remove(&mut entity);
         }
 
         state.insert(&mut entity);
-        let default_metadata = StateMetadata::default();
-        let metadata = machine
-            .states
-            .get(&state.type_id())
-            .unwrap_or(&default_metadata);
 
-        let any_metadata = machine
+        for insert in &machine
             .states
             .get(&TypeId::of::<AnyState>())
-            .unwrap_or(&default_metadata);
-
-        for insert in &any_metadata.inserts {
+            .unwrap()
+            .inserts
+        {
             insert.insert(&mut entity);
         }
 
-        for insert in &metadata.inserts {
+        for insert in &machine.current().inserts {
             insert.insert(&mut entity);
         }
 
-        let mut transitions = metadata.transitions.clone();
-        for (trigger_id, index) in &any_metadata.transitions.trigger_indices {
-            let trigger_transitions = &any_metadata.transitions.transitions[*index];
-            for transition in &trigger_transitions.transitions {
-                transitions.add(
-                    transition.trigger.dyn_clone(),
-                    *trigger_id,
-                    trigger_transitions.name.clone(),
-                    transition.target.clone(),
-                );
-            }
-        }
-
-        let removes = metadata
-            .removes
-            .iter()
-            .chain(any_metadata.removes.iter())
-            .map(|remove| remove.dyn_clone())
-            .collect();
-
-        machine.current = Some(DynState::dyn_clone(&*state));
-        machine.transitions = transitions;
-        machine.removes = removes;
+        machine.current = Some(state.type_id());
     }
 }

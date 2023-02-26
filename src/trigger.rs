@@ -100,10 +100,19 @@ pub trait Trigger: 'static + Clone + Reflect + Send + Sync {
     }
 }
 
+/// Automatically implements [`Trigger`]. Implement this instead of there is no relevant
+/// information to pass for [`Trigger::Err`].
 pub trait OptionTrigger: 'static + Clone + Reflect + Send + Sync {
+    /// System parameter provided to [`OptionTrigger::trigger`]. Must not access [`StateMachine`].
     type Param<'w, 's>: SystemParam;
+    /// When the trigger occurs, this data is returned from `trigger`, and passed
+    /// to every transition builder on this trigger. If there's no relevant information to pass,
+    /// just use `()`.
     type Some: Reflect;
 
+    /// Called for every entity that may transition to a state on this trigger. Return `true`
+    /// if it should transition, and `false` if it should not. In most cases, you may use
+    /// `&Self::Param<'_, '_>` as `param`'s type.
     fn trigger(
         &self,
         entity: Entity,
@@ -131,9 +140,15 @@ impl<T: OptionTrigger> Trigger for T {
     }
 }
 
+/// Automatically implements [`Trigger`]. Implement this instead of there is no relevant
+/// information to pass for [`Trigger::Ok`] or [`Trigger::Err`].
 pub trait BoolTrigger: 'static + Clone + Reflect + Send + Sync {
+    /// System parameter provided to [`BoolTrigger::trigger`]. Must not access [`StateMachine`].
     type Param<'w, 's>: SystemParam;
 
+    /// Called for every entity that may transition to a state on this trigger. Return `true`
+    /// if it should transition, and `false` if it should not. In most cases, you may use
+    /// `&Self::Param<'_, '_>` as `param`'s type.
     fn trigger(
         &self,
         entity: Entity,
@@ -285,14 +300,26 @@ fn check_trigger<T: Trigger>(
     for (entity, mut machine) in &mut machines {
         let mut marks = Vec::default();
 
-        for (i, trigger) in machine.get_triggers::<T>().into_iter().enumerate() {
+        for (i, trigger) in machine.get_triggers::<T>(false).into_iter().enumerate() {
             if let Ok(result) = trigger.trigger(entity, &param) {
                 marks.push((i, result));
             }
         }
 
         for (i, result) in marks {
-            machine.mark_trigger::<T>(i, result);
+            machine.mark_trigger::<T>(i, result, false);
+        }
+
+        marks = Vec::default();
+
+        for (i, trigger) in machine.get_triggers::<T>(true).into_iter().enumerate() {
+            if let Ok(result) = trigger.trigger(entity, &param) {
+                marks.push((i, result));
+            }
+        }
+
+        for (i, result) in marks {
+            machine.mark_trigger::<T>(i, result, true);
         }
     }
 }

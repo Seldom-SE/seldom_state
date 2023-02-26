@@ -6,6 +6,7 @@ use leafwing_input_manager::{
 
 use crate::prelude::*;
 
+/// Plugin that registers input-related trigger for the given [`Actionlike`]
 pub struct InputTriggerPlugin<A: Actionlike + Reflect>(PhantomData<A>);
 
 impl<A: Actionlike + Reflect> Plugin for InputTriggerPlugin<A> {
@@ -20,6 +21,8 @@ impl<A: Actionlike + Reflect> Default for InputTriggerPlugin<A> {
     }
 }
 
+/// Function called by [`InputTriggerPlugin`]. You may instead call it directly
+/// or use `seldom_fn_plugin`, which is another crate I maintain.
 pub fn input_trigger_plugin<A: Actionlike + Reflect>(app: &mut App) {
     app.fn_plugin(trigger_plugin::<ActionDataTrigger<A>>)
         .fn_plugin(trigger_plugin::<AxisPairTrigger<A>>)
@@ -36,6 +39,7 @@ pub fn input_trigger_plugin<A: Actionlike + Reflect>(app: &mut App) {
 /// You must add an [`InputTriggerPlugin<Actionlike>`] with your [`Actionlike`] type.
 #[derive(Clone, Debug, Reflect)]
 pub struct ValueTrigger<A: Actionlike + Reflect> {
+    /// The action
     pub action: A,
     /// The minimum value. If no minimum is necessary, use [`f32::NEG_INFINITY`], or similar
     pub min: f32,
@@ -66,6 +70,7 @@ impl<A: Actionlike + Reflect> Trigger for ValueTrigger<A> {
 }
 
 impl<A: Actionlike + Reflect> ValueTrigger<A> {
+    /// Unbounded trigger
     pub fn unbounded(action: A) -> Self {
         Self {
             action,
@@ -74,6 +79,7 @@ impl<A: Actionlike + Reflect> ValueTrigger<A> {
         }
     }
 
+    /// Trigger with a minimum bound
     pub fn min(action: A, min: f32) -> Self {
         Self {
             action,
@@ -82,6 +88,7 @@ impl<A: Actionlike + Reflect> ValueTrigger<A> {
         }
     }
 
+    /// Trigger with a maximum bound
     pub fn max(action: A, max: f32) -> Self {
         Self {
             action,
@@ -95,6 +102,7 @@ impl<A: Actionlike + Reflect> ValueTrigger<A> {
 /// You must add an [`InputTriggerPlugin<Actionlike>`] with your [`Actionlike`] type.
 #[derive(Clone, Debug, Reflect)]
 pub struct ClampedValueTrigger<A: Actionlike + Reflect> {
+    /// The action
     pub action: A,
     /// The minimum value. If no minimum is necessary, use `f32::NEG_INFINITY`, or similar.
     pub min: f32,
@@ -125,6 +133,7 @@ impl<A: Actionlike + Reflect> Trigger for ClampedValueTrigger<A> {
 }
 
 impl<A: Actionlike + Reflect> ClampedValueTrigger<A> {
+    /// Unbounded trigger
     pub fn unbounded(action: A) -> Self {
         Self {
             action,
@@ -133,6 +142,7 @@ impl<A: Actionlike + Reflect> ClampedValueTrigger<A> {
         }
     }
 
+    /// Trigger with a minimum bound
     pub fn min(action: A, min: f32) -> Self {
         Self {
             action,
@@ -141,6 +151,7 @@ impl<A: Actionlike + Reflect> ClampedValueTrigger<A> {
         }
     }
 
+    /// Trigger with a maximum bound
     pub fn max(action: A, max: f32) -> Self {
         Self {
             action,
@@ -154,6 +165,7 @@ impl<A: Actionlike + Reflect> ClampedValueTrigger<A> {
 /// bounds. You must add an [`InputTriggerPlugin<Actionlike>`] with your [`Actionlike`] type.
 #[derive(Clone, Debug, Reflect)]
 pub struct AxisPairTrigger<A: Actionlike + Reflect> {
+    /// The action
     pub action: A,
     /// Minimum axis pair length. If no minimum is necessary, use `0.`. To exclude specifically
     /// neutral axis pairs, use `f32::EPSILON`, or similar.
@@ -210,6 +222,7 @@ impl<A: Actionlike + Reflect> Trigger for AxisPairTrigger<A> {
 }
 
 impl<A: Actionlike + Reflect> AxisPairTrigger<A> {
+    /// Unbounded trigger
     pub fn unbounded(action: A) -> Self {
         Self {
             action,
@@ -220,6 +233,7 @@ impl<A: Actionlike + Reflect> AxisPairTrigger<A> {
         }
     }
 
+    /// Trigger with a minimum length bound
     pub fn min_length(action: A, min_length: f32) -> Self {
         Self {
             action,
@@ -230,6 +244,7 @@ impl<A: Actionlike + Reflect> AxisPairTrigger<A> {
         }
     }
 
+    /// Trigger with a maximum length bound
     pub fn max_length(action: A, max_length: f32) -> Self {
         Self {
             action,
@@ -240,6 +255,7 @@ impl<A: Actionlike + Reflect> AxisPairTrigger<A> {
         }
     }
 
+    /// Trigger with length bounds
     pub fn length_bounds(action: A, min_length: f32, max_length: f32) -> Self {
         Self {
             action,
@@ -250,6 +266,7 @@ impl<A: Actionlike + Reflect> AxisPairTrigger<A> {
         }
     }
 
+    /// Trigger with rotation bounds
     pub fn rotation_bounds(action: A, min_rotation: Rotation, max_rotation: Rotation) -> Self {
         Self {
             action,
@@ -265,6 +282,7 @@ impl<A: Actionlike + Reflect> AxisPairTrigger<A> {
 /// bounds. You must add an [`InputTriggerPlugin<Actionlike>`] with your [`Actionlike`] type.
 #[derive(Clone, Debug, Reflect)]
 pub struct ClampedAxisPairTrigger<A: Actionlike + Reflect> {
+    /// The action
     pub action: A,
     /// Minimum axis pair length. If no minimum is necessary, use `0.`. To exclude specifically
     /// neutral axis pairs, use `f32::EPSILON`, or similar.
@@ -321,6 +339,7 @@ impl<A: Actionlike + Reflect> Trigger for ClampedAxisPairTrigger<A> {
 }
 
 impl<A: Actionlike + Reflect> ClampedAxisPairTrigger<A> {
+    /// Unbounded trigger
     pub fn unbounded(action: A) -> Self {
         Self {
             action,
@@ -331,6 +350,7 @@ impl<A: Actionlike + Reflect> ClampedAxisPairTrigger<A> {
         }
     }
 
+    /// Trigger with a minimum length bound
     pub fn min_length(action: A, min_length: f32) -> Self {
         Self {
             action,
@@ -341,6 +361,7 @@ impl<A: Actionlike + Reflect> ClampedAxisPairTrigger<A> {
         }
     }
 
+    /// Trigger with a maximum length bound
     pub fn max_length(action: A, max_length: f32) -> Self {
         Self {
             action,
@@ -351,6 +372,7 @@ impl<A: Actionlike + Reflect> ClampedAxisPairTrigger<A> {
         }
     }
 
+    /// Trigger with length bounds
     pub fn length_bounds(action: A, min_length: f32, max_length: f32) -> Self {
         Self {
             action,
@@ -361,6 +383,7 @@ impl<A: Actionlike + Reflect> ClampedAxisPairTrigger<A> {
         }
     }
 
+    /// Trigger with rotation bounds
     pub fn rotation_bounds(action: A, min_rotation: Rotation, max_rotation: Rotation) -> Self {
         Self {
             action,
