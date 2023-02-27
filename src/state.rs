@@ -31,9 +31,9 @@ use crate::{
 ///
 /// If you are concerned with performance, consider having your states use sparse set storage,
 /// since they may be added to and removed from entities.
-pub trait MachineState: 'static + Bundle + Clone + Reflect + Send + Sync {}
+pub trait MachineState: Bundle + Clone + Reflect {}
 
-impl<T: 'static + Bundle + Clone + Reflect + Send + Sync> MachineState for T {}
+impl<T: Bundle + Clone + Reflect> MachineState for T {}
 
 /// State that represents any state. Transitions from [`AnyState`] may transition
 /// from any other state.
@@ -41,7 +41,7 @@ impl<T: 'static + Bundle + Clone + Reflect + Send + Sync> MachineState for T {}
 pub struct AnyState;
 
 #[as_dyn_trait]
-pub(crate) trait DynState: 'static + Insert + Reflect + Remove + Send + Sync {
+pub(crate) trait DynState: Insert + Reflect + Remove {
     fn dyn_clone(&self) -> Box<dyn DynState>;
 }
 

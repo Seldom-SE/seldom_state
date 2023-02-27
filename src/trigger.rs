@@ -69,21 +69,22 @@ pub struct Never {
 /// Types that implement this may be used in [`StateMachine`]s to transition from one state
 /// to another. [`TriggerPlugin`] must be added for each trigger. Look at an example
 /// for implementing this trait, since it can be tricky.
-pub trait Trigger: 'static + Clone + Reflect + Send + Sync {
+pub trait Trigger: 'static + Reflect + Send + Sync {
     /// System parameter provided to [`Trigger::trigger`]. Must not access [`StateMachine`].
     type Param<'w, 's>: SystemParam;
     /// When the trigger occurs, this data is returned from `trigger`, and passed
     /// to every transition builder on this trigger. If there's no relevant information to pass,
-    /// just use `()`.
+    /// just use `()`. If there's also no relevant information to pass to [`Trigger::Err`],
+    /// implement [`BoolTrigger`] instead.
     type Ok: Reflect;
     /// When the trigger does not occur, this data is returned from `trigger`. In this case,
     /// [`NotTrigger<Self>`] passes it to every transition builder on this trigger.
-    /// If there's no relevant information to pass, just use `()`. If this trigger is infallible,
-    /// use [`Never`].
+    /// If there's no relevant information to pass, implement [`OptionTrigger`] instead.
+    /// If this trigger is infallible, use [`Never`].
     type Err: Reflect;
 
-    /// Called for every entity that may transition to a state on this trigger. Return `true`
-    /// if it should transition, and `false` if it should not. In most cases, you may use
+    /// Called for every entity that may transition to a state on this trigger. Return `Ok`
+    /// if it should transition, and `Err` if it should not. In most cases, you may use
     /// `&Self::Param<'_, '_>` as `param`'s type.
     fn trigger(
         &self,
@@ -102,16 +103,16 @@ pub trait Trigger: 'static + Clone + Reflect + Send + Sync {
 
 /// Automatically implements [`Trigger`]. Implement this instead of there is no relevant
 /// information to pass for [`Trigger::Err`].
-pub trait OptionTrigger: 'static + Clone + Reflect + Send + Sync {
+pub trait OptionTrigger: 'static + Reflect + Send + Sync {
     /// System parameter provided to [`OptionTrigger::trigger`]. Must not access [`StateMachine`].
     type Param<'w, 's>: SystemParam;
     /// When the trigger occurs, this data is returned from `trigger`, and passed
     /// to every transition builder on this trigger. If there's no relevant information to pass,
-    /// just use `()`.
+    /// implement [`BoolTrigger`] instead.
     type Some: Reflect;
 
-    /// Called for every entity that may transition to a state on this trigger. Return `true`
-    /// if it should transition, and `false` if it should not. In most cases, you may use
+    /// Called for every entity that may transition to a state on this trigger. Return `Some`
+    /// if it should transition, and `None` if it should not. In most cases, you may use
     /// `&Self::Param<'_, '_>` as `param`'s type.
     fn trigger(
         &self,
@@ -141,8 +142,8 @@ impl<T: OptionTrigger> Trigger for T {
 }
 
 /// Automatically implements [`Trigger`]. Implement this instead of there is no relevant
-/// information to pass for [`Trigger::Ok`] or [`Trigger::Err`].
-pub trait BoolTrigger: 'static + Clone + Reflect + Send + Sync {
+/// information to pass for [`Trigger::Ok`] and [`Trigger::Err`].
+pub trait BoolTrigger: 'static + Reflect + Send + Sync {
     /// System parameter provided to [`BoolTrigger::trigger`]. Must not access [`StateMachine`].
     type Param<'w, 's>: SystemParam;
 
@@ -176,7 +177,7 @@ impl<T: BoolTrigger> OptionTrigger for T {
 }
 
 /// Trigger that always transitions
-#[derive(Clone, Debug, Reflect)]
+#[derive(Debug, Reflect)]
 pub struct AlwaysTrigger;
 
 impl Trigger for AlwaysTrigger {
@@ -191,7 +192,7 @@ impl Trigger for AlwaysTrigger {
 
 /// Trigger that negates the contained trigger. It is works for any trigger that is added
 /// by [`TriggerPlugin`].
-#[derive(Clone, Debug, Deref, DerefMut, Reflect)]
+#[derive(Debug, Deref, DerefMut, Reflect)]
 pub struct NotTrigger<T: Trigger>(pub T);
 
 impl<T: Trigger> Trigger for NotTrigger<T> {
@@ -233,7 +234,7 @@ pub enum Done {
 
 /// Trigger that transitions if the entity has the [`Done`] component
 /// with the associated variant.
-#[derive(Clone, Debug, Reflect)]
+#[derive(Debug, Reflect)]
 pub enum DoneTrigger {
     /// Success variant
     Success,
@@ -261,9 +262,7 @@ impl DoneTrigger {
     }
 }
 
-pub(crate) trait DynTrigger: Reflect {
-    fn dyn_clone(&self) -> Box<dyn DynTrigger>;
-}
+pub(crate) trait DynTrigger: Reflect {}
 
 impl Debug for dyn DynTrigger {
     fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
@@ -271,11 +270,7 @@ impl Debug for dyn DynTrigger {
     }
 }
 
-impl<T: Trigger> DynTrigger for T {
-    fn dyn_clone(&self) -> Box<dyn DynTrigger> {
-        Box::new(self.clone())
-    }
-}
+impl<T: Trigger> DynTrigger for T {}
 
 #[derive(Default, Deref, DerefMut, Resource)]
 pub(crate) struct RegisteredTriggers(Vec<TypeId>);

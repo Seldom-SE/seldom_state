@@ -79,22 +79,25 @@ struct Near {
     range: f32,
 }
 
+// Also see `OptionTrigger` and `BoolTrigger`
 impl Trigger for Near {
     // Put the parameters that your trigger needs here
     // For concision, you may use `bevy_ecs::system::system_param::lifetimeless` variants of system
     // params, like so:
-    // type Param<'w, 's> = (SQuery<&'static Transform>, SRes<Time>);
+    // `type Param<'w, 's> = (SQuery<&'static Transform>, SRes<Time>);`
     // Triggers are immutable; you may not access system params mutably
     // Do not query for the `StateMachine` component in this type. This, unfortunately, will panic.
     // `Time` is included here to demonstrate how to get multiple system params
     type Param<'w, 's> = (Query<'w, 's, &'static Transform>, Res<'w, Time>);
+    // These types are used by transition builders, for dataflow from triggers to transitions
+    // See `StateMachine::trans_builder`
     type Ok = f32;
     type Err = f32;
 
     // This function checks if the given entity should trigger
     // It runs once per frame for each entity that is in a state that can transition
     // on this trigger
-    // Return `true` to trigger and `false` to not trigger
+    // Return `Ok` to trigger and `Err` to not trigger
     fn trigger(
         &self,
         entity: Entity,
@@ -105,7 +108,7 @@ impl Trigger for Near {
             - transforms.get(entity).unwrap().translation.truncate();
 
         // Use the Pythagorean Theorem to determine whether the target is within range
-        // If it is, return `true` to trigger!
+        // If it is, return `Ok` to trigger!
         let distance = (delta.x * delta.x + delta.y * delta.y).sqrt();
         (distance <= self.range).then_some(distance).ok_or(distance)
     }

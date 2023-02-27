@@ -1,6 +1,6 @@
 [package]
 name = "seldom_state"
-version = "0.3.1-dev"
+version = "0.4.0-dev"
 edition = "2021"
 categories = [ "game-development" ]
 description = "Component-based state machine plugin for Bevy. Useful for AI, player state, and other entities that occupy various states."
@@ -11,7 +11,6 @@ readme = "README.md"
 repository = "https://github.com/Seldom-SE/seldom_state"
 
 [features]
-default = [ "leafwing_input" ] # TEMP
 leafwing_input = [ "dep:leafwing-input-manager" ]
 
 [dependencies]

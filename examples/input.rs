@@ -10,6 +10,7 @@ fn main() {
         .add_plugins(DefaultPlugins)
         .add_plugin(InputManagerPlugin::<Action>::default())
         .add_plugin(StateMachinePlugin)
+        // You must add `InputTriggerPlugin` for your action's triggers to work
         .add_plugin(InputTriggerPlugin::<Action>::default())
         .add_plugin(TriggerPlugin::<GroundedTrigger>::default())
         .add_startup_system(init)
@@ -20,7 +21,6 @@ fn main() {
 
 const JUMP_VELOCITY: f32 = 500.;
 
-// Setup the game
 fn init(mut commands: Commands, asset_server: Res<AssetServer>) {
     commands.spawn(Camera2dBundle::default());
 
@@ -30,6 +30,7 @@ fn init(mut commands: Commands, asset_server: Res<AssetServer>) {
             texture: asset_server.load("player.png"),
             ..default()
         },
+        // From `leafwing-input-manager`
         InputManagerBundle {
             input_map: InputMap::default()
                 .insert(VirtualAxis::horizontal_arrow_keys(), Action::Move)
@@ -42,14 +43,20 @@ fn init(mut commands: Commands, asset_server: Res<AssetServer>) {
                 .build(),
             ..default()
         },
+        // This state machine achieves a very rigid movement system. Consider a state machine
+        // for whatever part of your player controller that you want to be rigid. Like the movement
+        // in Castlevania, or the attacks in a fighting game.
         StateMachine::new(Grounded::Idle)
+            // Whenever the player presses jump, jump
             .trans::<Grounded>(
                 JustPressedTrigger(Action::Jump),
                 Falling {
                     velocity: JUMP_VELOCITY,
                 },
             )
+            // When the player hits the ground, idle
             .trans::<Falling>(GroundedTrigger, Grounded::Idle)
+            //
             .trans_builder::<Grounded, _, _>(ValueTrigger::unbounded(Action::Move), |&value| {
                 Some(match value {
                     value if value > 0.5 => Grounded::Right,
@@ -73,7 +80,6 @@ impl BoolTrigger for GroundedTrigger {
     type Param<'w, 's> = Query<'w, 's, (&'static Transform, &'static Falling)>;
 
     fn trigger(&self, entity: Entity, fallings: &Self::Param<'_, '_>) -> bool {
-        // Find the displacement between the target and this entity
         let (transform, falling) = fallings.get(entity).unwrap();
         transform.translation.y <= 0. && falling.velocity <= 0.
     }

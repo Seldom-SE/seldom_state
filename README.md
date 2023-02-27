@@ -22,9 +22,9 @@ State machines are created like so:
 commands.spawn((
     // ... (other inserts)
     StateMachine::new(my_initial_state)
-        .trans::<MyState1>(my_trigger_1, my_state_4)
-        .trans::<MyState2>(my_trigger_2, my_state_5)
-        .trans::<MyState3>(my_trigger_3, my_state_6)
+        .trans::<MyState1>(my_trigger_1, my_state_3)
+        .trans::<AnyState>(my_trigger_2, my_state_4)
+        .trans_builder::<MyState2, _, _>(my_trigger_3, |trigger_data| make_state_5(trigger_data))
         .insert_on_enter::<MyState7>(my_bundle)
         .remove_on_exit::<MyState7, MyBundle>()
         // etc.
@@ -39,10 +39,13 @@ need improvement, feel free to submit an issue or pr!
 ## Features
 
 * State machine component with user-defined states and triggers
-* Three built-in triggers
+* 12 built-in triggers
     * `AlwaysTrigger`: always triggers
     * `NotTrigger`: contains a trigger, which it negates
     * `DoneTrigger`: triggers when the user adds the `Done` component to the entity
+    * 9 more triggers enabled by the `leafwing_input` feature
+* `AnyState` state, that can be used in type parameters to represent any state
+* Transition builders that allow dataflow from triggers to states (`StateMachine::trans_builder`)
 * Automatically insert bundles upon entering a state, and remove others upon exiting
 (`StateMachine::insert_on_enter` and `StateMachine::remove_on_exit`)
 
@@ -51,9 +54,8 @@ need improvement, feel free to submit an issue or pr!
 - [X] Warn or panic when using a trigger whose plugin hasn't been added
 - [X] [`leafwing_input_manager`](https://github.com/Leafwing-Studios/leafwing-input-manager)
 integration (I will probably implement this myself)
-- [X] Dataflow from triggers to states using state builders (I will probably implement this myself)
-- [X] Transitions that can transition from any state (I might implement this, and definitely want
-it)
+- [X] Dataflow from triggers to states using state builders
+- [X] Transitions that can transition from any state
 - [X] Automatically insert bundle on transition
 - [ ] Built-in timer trigger (I will probably implement this myself)
 - [ ] More flexible, composable triggers, such as `And<A: Trigger, B: Trigger>(A, B)` (I might

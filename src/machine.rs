@@ -3,7 +3,7 @@ use std::any::TypeId;
 use bevy::utils::HashMap;
 
 use crate::{
-    bundle::{Insert, Removable, Remove, Remover},
+    bundle::{Insert, Removable, Remove},
     prelude::*,
     stage::StateStage,
     state::{AsDynStateBuilderTypedBox, DynState, StateBuilder},
@@ -20,19 +20,10 @@ enum TransitionTarget {
     Builder(Box<dyn StateBuilder>),
 }
 
-impl Clone for TransitionTarget {
-    fn clone(&self) -> Self {
-        match self {
-            Self::State(state) => Self::State(DynState::dyn_clone(&**state)),
-            Self::Builder(builder) => Self::Builder(builder.dyn_clone()),
-        }
-    }
-}
-
 impl TransitionTarget {
     fn state(&self, result: &dyn Reflect) -> Option<Box<dyn DynState>> {
         match self {
-            Self::State(state) => Some(DynState::dyn_clone(&**state)),
+            Self::State(state) => Some(state.dyn_clone()),
             Self::Builder(builder) => builder.build(result),
         }
     }
@@ -45,23 +36,13 @@ struct Transition {
     target: TransitionTarget,
 }
 
-impl Clone for Transition {
-    fn clone(&self) -> Self {
-        Self {
-            result: self.result.as_ref().map(|result| result.clone_value()),
-            trigger: self.trigger.dyn_clone(),
-            target: self.target.clone(),
-        }
-    }
-}
-
-#[derive(Clone, Debug)]
+#[derive(Debug)]
 struct TriggerTransitions {
     transitions: Vec<Transition>,
     name: String,
 }
 
-#[derive(Clone, Debug, Default)]
+#[derive(Debug, Default)]
 struct Transitions {
     transitions: Vec<TriggerTransitions>,
     trigger_indices: HashMap<TypeId, usize>,
@@ -101,54 +82,27 @@ struct StateMetadata {
     removes: Vec<Box<dyn Remove>>,
 }
 
-impl Clone for StateMetadata {
-    fn clone(&self) -> Self {
-        Self {
-            transitions: self.transitions.clone(),
-            inserts: self
-                .inserts
-                .iter()
-                .map(|insert| insert.dyn_clone())
-                .collect(),
-            removes: self
-                .removes
-                .iter()
-                .map(|remove| remove.dyn_clone())
-                .collect(),
-        }
-    }
-}
-
 impl StateMetadata {
     fn new<S: Bundle>() -> Self {
         Self {
             transitions: default(),
             inserts: default(),
-            removes: vec![Box::<Remover<S>>::default()],
+            removes: vec![Box::new(S::remover())],
         }
     }
 
-    fn new_from<S: Bundle>(_: &S) -> Self {
+    fn new_of<S: Bundle>(_: &S) -> Self {
         Self::new::<S>()
     }
 }
 
 /// State machine component. Entities with this component will have bundles (the states)
 /// added and removed based on the transitions that you add. Build one
-/// with [`StateMachine::new`], [`StateMachine::trans`], and other methods.
+/// with `StateMachine::new`, `StateMachine::trans`, and other methods.
 #[derive(Component, Debug)]
 pub struct StateMachine {
     current: Option<TypeId>,
     states: HashMap<TypeId, StateMetadata>,
-}
-
-impl Clone for StateMachine {
-    fn clone(&self) -> Self {
-        Self {
-            current: self.current,
-            states: self.states.clone(),
-        }
-    }
 }
 
 impl StateMachine {
@@ -156,7 +110,7 @@ impl StateMachine {
     /// with [`StateMachine::trans`].
     pub fn new(initial: impl MachineState) -> Self {
         let type_id = initial.type_id();
-        let metadata = StateMetadata::new_from(&initial);
+        let metadata = StateMetadata::new_of(&initial);
 
         let mut initial_metadata = StateMetadata::new::<()>();
         initial_metadata.transitions.add(
