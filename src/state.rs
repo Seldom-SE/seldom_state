@@ -38,7 +38,7 @@ impl<T: Bundle + Clone + Reflect> MachineState for T {}
 /// State that represents any state. Transitions from [`AnyState`] may transition
 /// from any other state.
 #[derive(Clone, Component, Debug, Reflect)]
-pub struct AnyState;
+pub enum AnyState {}
 
 #[as_dyn_trait]
 pub(crate) trait DynState: Insert + Reflect + Remove {
