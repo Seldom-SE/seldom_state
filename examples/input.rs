@@ -44,8 +44,8 @@ fn init(mut commands: Commands, asset_server: Res<AssetServer>) {
             ..default()
         },
         // This state machine achieves a very rigid movement system. Consider a state machine
-        // for whatever part of your player controller that you want to be rigid. Like the movement
-        // in Castlevania, or the attacks in a fighting game.
+        // for whatever parts of your player controller that involve discrete states.
+        // Like the movement in Castlevania and Celeste, and the attacks in a fighting game.
         StateMachine::new(Grounded::Idle)
             // Whenever the player presses jump, jump
             .trans::<Grounded>(
@@ -56,7 +56,7 @@ fn init(mut commands: Commands, asset_server: Res<AssetServer>) {
             )
             // When the player hits the ground, idle
             .trans::<Falling>(GroundedTrigger, Grounded::Idle)
-            //
+            // When the player is grounded, set their movement direction
             .trans_builder::<Grounded, _, _>(ValueTrigger::unbounded(Action::Move), |&value| {
                 Some(match value {
                     value if value > 0.5 => Grounded::Right,
@@ -73,7 +73,7 @@ enum Action {
     Jump,
 }
 
-#[derive(Clone, Reflect)]
+#[derive(Reflect)]
 struct GroundedTrigger;
 
 impl BoolTrigger for GroundedTrigger {

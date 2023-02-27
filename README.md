@@ -53,11 +53,11 @@ need improvement, feel free to submit an issue or pr!
 
 - [X] Warn or panic when using a trigger whose plugin hasn't been added
 - [X] [`leafwing_input_manager`](https://github.com/Leafwing-Studios/leafwing-input-manager)
-integration (I will probably implement this myself)
+integration
 - [X] Dataflow from triggers to states using state builders
 - [X] Transitions that can transition from any state
 - [X] Automatically insert bundle on transition
-- [ ] Built-in timer trigger (I will probably implement this myself)
+- [ ] Built-in timer trigger (I might implement this, and wouldn't mind it)
 - [ ] More flexible, composable triggers, such as `And<A: Trigger, B: Trigger>(A, B)` (I might
 implement this, and definitely want it)
 - [ ] Multiple state machines on an entity (I might implement this, and probably want it)

@@ -1,5 +1,30 @@
 # Changelog
 
+## 0.4 (2022-02-26)
+
+### Added
+
+- `StateMachine::trans_builder` builds a state based on data provided by the trigger
+- `AnyState` state that can be used in type parameters to represent any state
+- `leafwing_input` feature for input-related triggers: `ValueTrigger`, `ClampedValueTrigger`,
+`AxisPairTrigger`, `ClampedAxisPairTrigger`, `JustPressedTrigger`, `PressedTrigger`,
+`JustReleasedTrigger`, `ReleasedTrigger`, and `ActionDataTrigger`
+- `InputTriggerPlugin<Actionlike>` for easily registering input-related triggers
+- `OptionTrigger` and `BoolTrigger` offer simpler APIs than `Trigger`
+- `Never` type for `Trigger::Err` when the trigger always occurs
+
+### Changed
+
+- A panic will occur when using a trigger that hasn't been registered
+- `Trigger` has associated types `Ok` and `Err`, and `Trigger::trigger` returns
+a `Result<Self::Ok, Self::Err>`, which are used in transition builders
+
+### Removed
+
+- `Clone` and `FromReflect` requirements for `Trigger`
+- `Clone` from `StateMachine`
+- `FromReflect` re-export from `prelude`
+
 ## 0.3 (2022-11-12)
 
 ### Changed
