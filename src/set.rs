@@ -3,8 +3,8 @@
 use crate::prelude::*;
 
 /// Stages used by this crate
-#[derive(Debug, StageLabel)]
-pub enum StateStage {
+#[derive(Clone, Debug, Eq, Hash, PartialEq, SystemSet)]
+pub enum StateSet {
     /// Test for triggers
     Trigger,
     /// Do state transitions

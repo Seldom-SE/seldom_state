@@ -5,13 +5,13 @@ use bevy::utils::HashMap;
 use crate::{
     bundle::{Insert, Removable, Remove},
     prelude::*,
-    stage::StateStage,
+    set::StateSet,
     state::{AsDynStateBuilderTypedBox, DynState, StateBuilder},
     trigger::{DynTrigger, RegisteredTriggers},
 };
 
 pub(crate) fn machine_plugin(app: &mut App) {
-    app.add_system_to_stage(StateStage::Transition, transition);
+    app.add_system(transition.in_set(StateSet::Transition));
 }
 
 #[derive(Debug)]

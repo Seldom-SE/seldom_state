@@ -100,18 +100,16 @@ struct CursorPosition(Option<Vec2>);
 
 fn update_cursor_position(
     cameras: Query<&Transform, With<Camera2d>>,
-    windows: Res<Windows>,
+    windows: Query<&Window>,
     mut position: ResMut<CursorPosition>,
 ) {
-    if let Ok(transform) = cameras.get_single() {
-        let window = windows.get_primary().unwrap();
-        **position = window.cursor_position().map(|cursor_position| {
-            (transform.compute_matrix()
-                * (cursor_position - Vec2::new(window.width(), window.height()) / 2.)
-                    .extend(0.)
-                    .extend(1.))
-            .truncate()
-            .truncate()
-        });
-    }
+    let window = windows.single();
+    **position = window.cursor_position().map(|cursor_position| {
+        (cameras.single().compute_matrix()
+            * (cursor_position - Vec2::new(window.width(), window.height()) / 2.)
+                .extend(0.)
+                .extend(1.))
+        .truncate()
+        .truncate()
+    });
 }

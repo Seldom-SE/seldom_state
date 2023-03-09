@@ -15,9 +15,9 @@ use std::{
     marker::PhantomData,
 };
 
-use bevy::ecs::system::{StaticSystemParam, SystemParam, SystemParamFetch};
+use bevy::ecs::system::{StaticSystemParam, SystemParam};
 
-use crate::{prelude::*, stage::StateStage};
+use crate::{prelude::*, set::StateSet};
 
 /// Plugin that must be added for a trigger to be checked. Also registers the [`NotTrigger<T>`]
 /// trigger.
@@ -44,18 +44,16 @@ impl<T: Trigger> Default for TriggerPlugin<T> {
 /// Function called by [`TriggerPlugin`]. You may instead call it directly
 /// or use `seldom_fn_plugin`, which is another crate I maintain.
 pub fn trigger_plugin<T: Trigger>(app: &mut App) {
-    app.add_system_to_stage(StateStage::Trigger, check_trigger::<T>)
-        .add_system_to_stage(StateStage::Trigger, check_trigger::<NotTrigger<T>>)
-        .add_startup_system(register_trigger::<T>)
-        .add_startup_system(register_trigger::<NotTrigger<T>>);
+    app.add_systems((check_trigger::<T>, check_trigger::<NotTrigger<T>>).in_set(StateSet::Trigger))
+        .add_startup_systems((register_trigger::<T>, register_trigger::<NotTrigger<T>>));
 }
 
 pub(crate) fn trigger_plugin_internal(app: &mut App) {
     app.fn_plugin(trigger_plugin::<AlwaysTrigger>)
         .fn_plugin(trigger_plugin::<DoneTrigger>)
         .init_resource::<RegisteredTriggers>()
-        .add_system(validate_triggers)
-        .add_system_to_stage(StateStage::Transition, remove_done_markers);
+        .add_startup_system(validate_triggers)
+        .add_system(remove_done_markers.in_set(StateSet::Transition));
 }
 
 /// Wrapper for [`core::convert::Infallible`]. Use for [`Trigger::Err`] if the trigger
@@ -89,10 +87,7 @@ pub trait Trigger: 'static + Reflect + Send + Sync {
     fn trigger(
         &self,
         entity: Entity,
-        param: &<<<Self as Trigger>::Param<'_, '_> as SystemParam>::Fetch as SystemParamFetch<
-            '_,
-            '_,
-        >>::Item,
+        param: &<<Self as Trigger>::Param<'_, '_> as SystemParam>::Item<'_, '_>,
     ) -> Result<Self::Ok, Self::Err>;
 
     /// Get the name of the type, for use in logging. You probably should not override this.
@@ -117,10 +112,7 @@ pub trait OptionTrigger: 'static + Reflect + Send + Sync {
     fn trigger(
         &self,
         entity: Entity,
-        param: &<<<Self as OptionTrigger>::Param<'_, '_> as SystemParam>::Fetch as SystemParamFetch<
-            '_,
-            '_,
-        >>::Item,
+        param: &<<Self as OptionTrigger>::Param<'_, '_> as SystemParam>::Item<'_, '_>,
     ) -> Option<Self::Some>;
 }
 
@@ -132,10 +124,7 @@ impl<T: OptionTrigger> Trigger for T {
     fn trigger(
         &self,
         entity: Entity,
-        param: &<<<Self as Trigger>::Param<'_, '_> as SystemParam>::Fetch as SystemParamFetch<
-            '_,
-            '_,
-        >>::Item,
+        param: &<<Self as Trigger>::Param<'_, '_> as SystemParam>::Item<'_, '_>,
     ) -> Result<Self::Ok, ()> {
         OptionTrigger::trigger(self, entity, param).ok_or(())
     }
@@ -153,10 +142,7 @@ pub trait BoolTrigger: 'static + Reflect + Send + Sync {
     fn trigger(
         &self,
         entity: Entity,
-        param: &<<<Self as BoolTrigger>::Param<'_, '_> as SystemParam>::Fetch as SystemParamFetch<
-            '_,
-            '_,
-        >>::Item,
+        param: &<<Self as BoolTrigger>::Param<'_, '_> as SystemParam>::Item<'_, '_>,
     ) -> bool;
 }
 
@@ -167,10 +153,7 @@ impl<T: BoolTrigger> OptionTrigger for T {
     fn trigger(
         &self,
         entity: Entity,
-        param: &<<<Self as Trigger>::Param<'_, '_> as SystemParam>::Fetch as SystemParamFetch<
-            '_,
-            '_,
-        >>::Item,
+        param: &<<Self as Trigger>::Param<'_, '_> as SystemParam>::Item<'_, '_>,
     ) -> Option<()> {
         BoolTrigger::trigger(self, entity, param).then_some(())
     }
@@ -203,10 +186,7 @@ impl<T: Trigger> Trigger for NotTrigger<T> {
     fn trigger(
         &self,
         entity: Entity,
-        param: &<<<Self as Trigger>::Param<'_, '_> as SystemParam>::Fetch as SystemParamFetch<
-            '_,
-            '_,
-        >>::Item,
+        param: &<<Self as Trigger>::Param<'_, '_> as SystemParam>::Item<'_, '_>,
     ) -> Result<T::Err, T::Ok> {
         let Self(trigger) = self;
         match trigger.trigger(entity, param) {

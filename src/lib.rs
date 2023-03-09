@@ -5,13 +5,13 @@
 
 mod bundle;
 mod machine;
-pub mod stage;
+pub mod set;
 mod state;
 mod trigger;
 
 use machine::machine_plugin;
 use prelude::*;
-use stage::StateStage;
+use set::StateSet;
 use trigger::trigger_plugin_internal;
 
 /// Add to your app to use this crate.
@@ -27,18 +27,14 @@ impl Plugin for StateMachinePlugin {
 /// Function called by [`StateMachinePlugin`]. You may instead call it directly
 /// or use `seldom_fn_plugin`, which is another crate I maintain.
 pub fn state_machine_plugin(app: &mut App) {
-    app.add_stage_after(
-        CoreStage::Update,
-        StateStage::Trigger,
-        SystemStage::parallel(),
-    )
-    .add_stage_after(
-        StateStage::Trigger,
-        StateStage::Transition,
-        SystemStage::parallel(),
-    )
-    .fn_plugin(trigger_plugin_internal)
-    .fn_plugin(machine_plugin);
+    app.configure_set(StateSet::Trigger.in_base_set(CoreSet::PostUpdate))
+        .configure_set(
+            StateSet::Transition
+                .in_base_set(CoreSet::PostUpdate)
+                .after(StateSet::Trigger),
+        )
+        .fn_plugin(trigger_plugin_internal)
+        .fn_plugin(machine_plugin);
 }
 
 /// Module for convenient imports. Use with `use seldom_state::prelude::*;`.

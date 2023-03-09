@@ -43,7 +43,9 @@ need improvement, feel free to submit an issue or pr!
     * `AlwaysTrigger`: always triggers
     * `NotTrigger`: contains a trigger, which it negates
     * `DoneTrigger`: triggers when the user adds the `Done` component to the entity
-    * 9 more triggers enabled by the `leafwing_input` feature
+    * 9 more triggers enabled by the `leafwing_input` feature: `ValueTrigger`,
+    `ClampedValueTrigger`, `AxisPairTrigger`, `ClampedAxisPairTrigger`, `JustPressedTrigger`,
+    `PressedTrigger`, `JustReleasedTrigger`, `ReleasedTrigger`, and `ActionDataTrigger`
 * `AnyState` state, that can be used in type parameters to represent any state
 * Transition builders that allow dataflow from triggers to states (`StateMachine::trans_builder`)
 * Automatically insert bundles upon entering a state, and remove others upon exiting
