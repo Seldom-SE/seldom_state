@@ -1,5 +1,17 @@
 # Changelog
 
+## 0.5 (2022-03-12)
+
+### Changed
+
+- Updated `bevy` to 0.10
+- Updated `leafwing-input-manager` to 0.9
+- `AnyState` is uninhabited, so it cannot be constructed
+
+### Fixed
+
+- `insert_on_enter` inserting on exit instead of enter
+
 ## 0.4 (2022-02-26)
 
 ### Added

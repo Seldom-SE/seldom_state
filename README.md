@@ -108,7 +108,8 @@ See the `chase.rs` example for futher usage.
 
 | Bevy | `seldom_state` |
 | ---- | -------------- |
-| 0.9  | 0.3            |
+| 0.10 | 0.5            |
+| 0.9  | 0.3 - 0.4      |
 | 0.8  | 0.1 - 0.2      |
 
 ## License
