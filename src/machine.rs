@@ -336,6 +336,7 @@ fn transition(mut commands: Commands, mut machines: Query<(Entity, &mut StateMac
         }
 
         state.insert(&mut entity);
+        machine.current = Some(state.type_id());
 
         for insert in &machine
             .states
@@ -349,7 +350,5 @@ fn transition(mut commands: Commands, mut machines: Query<(Entity, &mut StateMac
         for insert in &machine.current().inserts {
             insert.insert(&mut entity);
         }
-
-        machine.current = Some(state.type_id());
     }
 }

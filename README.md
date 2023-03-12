@@ -63,6 +63,8 @@ integration
 - [ ] More flexible, composable triggers, such as `And<A: Trigger, B: Trigger>(A, B)` (I might
 implement this, and definitely want it)
 - [ ] Multiple state machines on an entity (I might implement this, and probably want it)
+- [ ] Replace `insert_on_enter` and `remove_on_exit` with `on_enter` and `on_exit` which each take
+an `impl Fn(&mut EntityCommands)` (I will probably implement this)
 
 ## Comparison with [`big-brain`](https://github.com/zkat/big-brain)
 
