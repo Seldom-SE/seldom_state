@@ -82,9 +82,6 @@ struct Near {
 // Also see `OptionTrigger` and `BoolTrigger`
 impl Trigger for Near {
     // Put the parameters that your trigger needs here
-    // For concision, you may use `bevy_ecs::system::system_param::lifetimeless` variants of system
-    // params, like so:
-    // `type Param<'w, 's> = (SQuery<&'static Transform>, SRes<Time>);`
     // Triggers are immutable; you may not access system params mutably
     // Do not query for the `StateMachine` component in this type. This, unfortunately, will panic.
     // `Time` is included here to demonstrate how to get multiple system params
