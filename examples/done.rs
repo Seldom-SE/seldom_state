@@ -36,7 +36,8 @@ fn init(mut commands: Commands, asset_server: Res<AssetServer>) {
             })
             // `DoneTrigger` triggers when the `Done` component is added to the entity
             // When they're done going to the selection, idle
-            .trans::<GoToSelection>(DoneTrigger::Success, Idle),
+            .trans::<GoToSelection>(DoneTrigger::Success, Idle)
+            .set_trans_logging(true),
     ));
 }
 

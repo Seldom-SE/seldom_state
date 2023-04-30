@@ -64,7 +64,9 @@ fn init(mut commands: Commands, asset_server: Res<AssetServer>) {
             // When they're in the `Follow` state, and the `near_player` trigger
             // does not occur, switch to the `Idle` state
             // `NotTrigger` is a built-in trigger that negates the given trigger
-            .trans::<Follow>(NotTrigger(near_player), Idle),
+            .trans::<Follow>(NotTrigger(near_player), Idle)
+            // Enable transition logging
+            .set_trans_logging(true),
     ));
 }
 

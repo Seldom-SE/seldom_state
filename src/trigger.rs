@@ -173,7 +173,7 @@ impl Trigger for AlwaysTrigger {
     }
 }
 
-/// Trigger that negates the contained trigger. It is works for any trigger that is added
+/// Trigger that negates the contained trigger. It works for any trigger that is added
 /// by [`TriggerPlugin`].
 #[derive(Debug, Deref, DerefMut, Reflect)]
 pub struct NotTrigger<T: Trigger>(pub T);
@@ -193,11 +193,6 @@ impl<T: Trigger> Trigger for NotTrigger<T> {
             Ok(ok) => Err(ok),
             Err(err) => Ok(err),
         }
-    }
-
-    fn base_type_name(&self) -> &str {
-        let Self(trigger) = self;
-        trigger.base_type_name()
     }
 }
 

@@ -1,4 +1,4 @@
-use std::any::TypeId;
+use std::any::{type_name, TypeId};
 
 use bevy::{
     ecs::system::{Command, EntityCommands},
@@ -79,6 +79,7 @@ impl Transitions {
 
 #[derive(Debug)]
 struct StateMetadata {
+    name: String,
     transitions: Transitions,
     on_enter: Vec<OnEvent>,
     on_exit: Vec<OnEvent>,
@@ -87,6 +88,7 @@ struct StateMetadata {
 impl StateMetadata {
     fn new<S: Bundle>() -> Self {
         Self {
+            name: type_name::<S>().to_owned(),
             transitions: default(),
             on_enter: default(),
             on_exit: vec![OnEvent::Entity(Box::new(|entity: &mut EntityCommands| {
@@ -107,6 +109,7 @@ impl StateMetadata {
 pub struct StateMachine {
     current: Option<TypeId>,
     states: HashMap<TypeId, StateMetadata>,
+    log_transitions: bool,
 }
 
 impl StateMachine {
@@ -133,6 +136,7 @@ impl StateMachine {
             ]
             .into_iter()
             .collect(),
+            log_transitions: false,
         }
     }
 
@@ -258,6 +262,12 @@ impl StateMachine {
         self
     }
 
+    /// Sets whether transitions are logged to the console
+    pub fn set_trans_logging(mut self, log_transitions: bool) -> Self {
+        self.log_transitions = log_transitions;
+        self
+    }
+
     pub(crate) fn validate_triggers(&self, registered: &RegisteredTriggers) {
         for state in self.states.values() {
             for (trigger, index) in &state.transitions.trigger_indices {
@@ -271,14 +281,16 @@ impl StateMachine {
         }
     }
 
+    fn current_id(&self) -> TypeId {
+        self.current.unwrap_or(TypeId::of::<bool>())
+    }
+
     fn current(&self) -> &StateMetadata {
-        &self.states[&self.current.unwrap_or(TypeId::of::<bool>())]
+        &self.states[&self.current_id()]
     }
 
     fn current_mut(&mut self) -> &mut StateMetadata {
-        self.states
-            .get_mut(&self.current.unwrap_or(TypeId::of::<bool>()))
-            .unwrap()
+        self.states.get_mut(&self.current_id()).unwrap()
     }
 
     pub(crate) fn get_triggers<T: Trigger>(&self, any_state: bool) -> impl IntoIterator<Item = &T> {
@@ -327,38 +339,50 @@ impl StateMachine {
 
 fn transition(mut commands: Commands, mut machines: Query<(Entity, &mut StateMachine)>) {
     for (entity, mut machine) in &mut machines {
-        let Some(state) = machine
-            .current_mut()
-            .transitions
-            .transitions
-            .iter_mut()
-            .flat_map(|transitions| &mut transitions.transitions)
-            .find_map(|transition| {
-                let state = transition
-                    .result
-                    .as_ref()
-                    .and_then(|result| transition.target.state(&**result));
-                transition.result = None;
-                state
-            })
-            .or_else(|| {
+        let state = [machine.current_id(), TypeId::of::<AnyState>()]
+            .into_iter()
+            .flat_map(|id| {
                 machine
                     .states
-                    .get_mut(&TypeId::of::<AnyState>())
+                    .get(&id)
                     .unwrap()
                     .transitions
                     .transitions
-                    .iter_mut()
-                    .flat_map(|transitions| &mut transitions.transitions)
-                    .find_map(|transition| {
-                        let state = transition
-                            .result
-                            .as_ref()
-                            .and_then(|result| transition.target.state(&**result));
-                        transition.result = None;
-                        state
-                    })
-            }) else { continue };
+                    .iter()
+                    .enumerate()
+                    .map(move |(index, transitions)| (id, index, transitions))
+            })
+            .flat_map(|(id, trigger_index, transitions)| {
+                transitions
+                    .transitions
+                    .iter()
+                    .map(move |transition| (id, trigger_index, transition))
+            })
+            .find_map(|(id, index, transition)| {
+                transition
+                    .result
+                    .as_ref()
+                    .and_then(|result| transition.target.state(&**result))
+                    .map(|state| (id, index, state))
+            });
+
+        for id in [machine.current_id(), TypeId::of::<AnyState>()] {
+            for transitions in &mut machine.states.get_mut(&id).unwrap().transitions.transitions {
+                for transition in &mut transitions.transitions {
+                    transition.result = None;
+                }
+            }
+        }
+
+        let Some((id, index, state)) = state else { continue };
+
+        if machine.log_transitions {
+            let trigger = &machine.states.get(&id).unwrap().transitions.transitions[index].name;
+            let from = &machine.current().name;
+            let to = state.type_name();
+
+            info!("{entity:?} transitioned on {trigger} from {from} to {to}",);
+        }
 
         for on_exit in &machine.current().on_exit {
             on_exit.trigger(entity, &mut commands);

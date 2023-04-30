@@ -63,7 +63,8 @@ fn init(mut commands: Commands, asset_server: Res<AssetServer>) {
                     value if value < -0.5 => Grounded::Left,
                     _ => Grounded::Idle,
                 })
-            }),
+            })
+            .set_trans_logging(true),
     ));
 }
 
