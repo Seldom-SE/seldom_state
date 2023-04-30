@@ -103,13 +103,16 @@ impl Trigger for Near {
         entity: Entity,
         (transforms, _time): &Self::Param<'_, '_>,
     ) -> Result<f32, f32> {
-        // Find the displacement between the target and this entity
-        let delta = transforms.get(self.target).unwrap().translation.truncate()
-            - transforms.get(entity).unwrap().translation.truncate();
+        // Find the distance between the target and this entity
+        let distance = transforms
+            .get(self.target)
+            .unwrap()
+            .translation
+            .truncate()
+            .distance(transforms.get(entity).unwrap().translation.truncate());
 
-        // Use the Pythagorean Theorem to determine whether the target is within range
+        // Check whether the target is within range
         // If it is, return `Ok` to trigger!
-        let distance = (delta.x * delta.x + delta.y * delta.y).sqrt();
         (distance <= self.range).then_some(distance).ok_or(distance)
     }
 }

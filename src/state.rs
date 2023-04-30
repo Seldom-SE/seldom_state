@@ -4,6 +4,7 @@ use std::{
 };
 
 use as_dyn_trait::as_dyn_trait;
+use bevy::ecs::system::EntityCommands;
 
 use crate::{
     bundle::{Insert, Remove},
@@ -96,6 +97,22 @@ impl<T: Reflect, N: DynState> StateBuilder for Box<dyn StateBuilderTyped<T, N>> 
 
     fn debug(&self) -> String {
         format!("Fn({}) -> {}", type_name::<T>(), type_name::<Option<N>>())
+    }
+}
+
+pub(crate) trait OnEvent: Send + Sync {
+    fn trigger(&self, entity: &mut EntityCommands);
+}
+
+impl Debug for dyn OnEvent {
+    fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
+        write!(f, "Fn(&mut EntityCommands)")
+    }
+}
+
+impl<F: Fn(&mut EntityCommands) + Send + Sync> OnEvent for F {
+    fn trigger(&self, entity: &mut EntityCommands) {
+        self(entity)
     }
 }
 

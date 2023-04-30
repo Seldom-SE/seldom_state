@@ -1,12 +1,11 @@
 use std::any::TypeId;
 
-use bevy::utils::HashMap;
+use bevy::{ecs::system::EntityCommands, utils::HashMap};
 
 use crate::{
-    bundle::{Insert, Removable, Remove},
     prelude::*,
     set::StateSet,
-    state::{AsDynStateBuilderTypedBox, DynState, StateBuilder},
+    state::{AsDynStateBuilderTypedBox, DynState, OnEvent, StateBuilder},
     trigger::{DynTrigger, RegisteredTriggers},
 };
 
@@ -78,16 +77,18 @@ impl Transitions {
 #[derive(Debug)]
 struct StateMetadata {
     transitions: Transitions,
-    inserts: Vec<Box<dyn Insert>>,
-    removes: Vec<Box<dyn Remove>>,
+    on_enter: Vec<Box<dyn OnEvent>>,
+    on_exit: Vec<Box<dyn OnEvent>>,
 }
 
 impl StateMetadata {
     fn new<S: Bundle>() -> Self {
         Self {
             transitions: default(),
-            inserts: default(),
-            removes: vec![Box::new(S::remover())],
+            on_enter: default(),
+            on_exit: vec![Box::new(|entity: &mut EntityCommands| {
+                entity.remove::<S>();
+            })],
         }
     }
 
@@ -195,25 +196,31 @@ impl StateMachine {
     }
 
     /// Adds an on-enter event to the state machine. Whenever the state machine transitions
-    /// into the given state, it will insert the given bundle into the entity.
-    pub fn insert_on_enter<S: MachineState>(mut self, bundle: impl Insert) -> Self {
+    /// into the given state, it will run the event.
+    pub fn on_enter<S: MachineState>(
+        mut self,
+        on_enter: impl 'static + Fn(&mut EntityCommands) + Send + Sync,
+    ) -> Self {
         self.states
             .entry(TypeId::of::<S>())
             .or_insert(StateMetadata::new::<S>())
-            .inserts
-            .push(Box::new(bundle));
+            .on_enter
+            .push(Box::new(on_enter));
 
         self
     }
 
     /// Adds an on-exit event to the state machine. Whenever the state machine transitions
-    /// from the given state, it will remove the given bundle from the entity.
-    pub fn remove_on_exit<S: MachineState, B: Bundle>(mut self) -> Self {
+    /// from the given state, it will run the command.
+    pub fn on_exit<S: MachineState>(
+        mut self,
+        on_exit: impl 'static + Fn(&mut EntityCommands) + Send + Sync,
+    ) -> Self {
         self.states
             .entry(TypeId::of::<S>())
             .or_insert(StateMetadata::new::<S>())
-            .removes
-            .push(Box::new(B::remover()));
+            .on_exit
+            .push(Box::new(on_exit));
 
         self
     }
@@ -322,33 +329,33 @@ fn transition(mut commands: Commands, mut machines: Query<(Entity, &mut StateMac
 
         let mut entity = commands.entity(entity);
 
-        for remove in &machine.current().removes {
-            remove.remove(&mut entity);
+        for on_exit in &machine.current().on_exit {
+            on_exit.trigger(&mut entity);
         }
 
-        for remove in &machine
+        for on_exit in &machine
             .states
             .get(&TypeId::of::<AnyState>())
             .unwrap()
-            .removes
+            .on_exit
         {
-            remove.remove(&mut entity);
+            on_exit.trigger(&mut entity);
         }
 
         state.insert(&mut entity);
         machine.current = Some(state.type_id());
 
-        for insert in &machine
+        for on_enter in &machine
             .states
             .get(&TypeId::of::<AnyState>())
             .unwrap()
-            .inserts
+            .on_enter
         {
-            insert.insert(&mut entity);
+            on_enter.trigger(&mut entity);
         }
 
-        for insert in &machine.current().inserts {
-            insert.insert(&mut entity);
+        for on_enter in &machine.current().on_enter {
+            on_enter.trigger(&mut entity);
         }
     }
 }
