@@ -1,6 +1,9 @@
 use std::any::TypeId;
 
-use bevy::{ecs::system::EntityCommands, utils::HashMap};
+use bevy::{
+    ecs::system::{Command, EntityCommands},
+    utils::HashMap,
+};
 
 use crate::{
     prelude::*,
@@ -77,8 +80,8 @@ impl Transitions {
 #[derive(Debug)]
 struct StateMetadata {
     transitions: Transitions,
-    on_enter: Vec<Box<dyn OnEvent>>,
-    on_exit: Vec<Box<dyn OnEvent>>,
+    on_enter: Vec<OnEvent>,
+    on_exit: Vec<OnEvent>,
 }
 
 impl StateMetadata {
@@ -86,9 +89,9 @@ impl StateMetadata {
         Self {
             transitions: default(),
             on_enter: default(),
-            on_exit: vec![Box::new(|entity: &mut EntityCommands| {
+            on_exit: vec![OnEvent::Entity(Box::new(|entity: &mut EntityCommands| {
                 entity.remove::<S>();
-            })],
+            }))],
         }
     }
 
@@ -205,7 +208,7 @@ impl StateMachine {
             .entry(TypeId::of::<S>())
             .or_insert(StateMetadata::new::<S>())
             .on_enter
-            .push(Box::new(on_enter));
+            .push(OnEvent::Entity(Box::new(on_enter)));
 
         self
     }
@@ -220,7 +223,37 @@ impl StateMachine {
             .entry(TypeId::of::<S>())
             .or_insert(StateMetadata::new::<S>())
             .on_exit
-            .push(Box::new(on_exit));
+            .push(OnEvent::Entity(Box::new(on_exit)));
+
+        self
+    }
+
+    /// Adds an on-enter command to the state machine. Whenever the state machine transitions
+    /// into the given state, it will run the command.
+    pub fn command_on_enter<S: MachineState>(
+        mut self,
+        command: impl Clone + Command + Sync,
+    ) -> Self {
+        self.states
+            .entry(TypeId::of::<S>())
+            .or_insert(StateMetadata::new::<S>())
+            .on_enter
+            .push(OnEvent::Command(Box::new(command)));
+
+        self
+    }
+
+    /// Adds an on-exit command to the state machine. Whenever the state machine transitions
+    /// from the given state, it will run the command.
+    pub fn command_on_exit<S: MachineState>(
+        mut self,
+        command: impl Clone + Command + Sync,
+    ) -> Self {
+        self.states
+            .entry(TypeId::of::<S>())
+            .or_insert(StateMetadata::new::<S>())
+            .on_exit
+            .push(OnEvent::Command(Box::new(command)));
 
         self
     }
@@ -327,10 +360,8 @@ fn transition(mut commands: Commands, mut machines: Query<(Entity, &mut StateMac
                     })
             }) else { continue };
 
-        let mut entity = commands.entity(entity);
-
         for on_exit in &machine.current().on_exit {
-            on_exit.trigger(&mut entity);
+            on_exit.trigger(entity, &mut commands);
         }
 
         for on_exit in &machine
@@ -339,10 +370,10 @@ fn transition(mut commands: Commands, mut machines: Query<(Entity, &mut StateMac
             .unwrap()
             .on_exit
         {
-            on_exit.trigger(&mut entity);
+            on_exit.trigger(entity, &mut commands);
         }
 
-        state.insert(&mut entity);
+        state.insert(&mut commands.entity(entity));
         machine.current = Some(state.type_id());
 
         for on_enter in &machine
@@ -351,11 +382,11 @@ fn transition(mut commands: Commands, mut machines: Query<(Entity, &mut StateMac
             .unwrap()
             .on_enter
         {
-            on_enter.trigger(&mut entity);
+            on_enter.trigger(entity, &mut commands);
         }
 
         for on_enter in &machine.current().on_enter {
-            on_enter.trigger(&mut entity);
+            on_enter.trigger(entity, &mut commands);
         }
     }
 }

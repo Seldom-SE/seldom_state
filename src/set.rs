@@ -1,8 +1,8 @@
-//! Bevy stage stuff
+//! Bevy system set stuff
 
 use crate::prelude::*;
 
-/// Stages used by this crate
+/// System sets used by this crate
 #[derive(Clone, Debug, Eq, Hash, PartialEq, SystemSet)]
 pub enum StateSet {
     /// Test for triggers

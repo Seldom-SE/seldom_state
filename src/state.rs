@@ -4,7 +4,7 @@ use std::{
 };
 
 use as_dyn_trait::as_dyn_trait;
-use bevy::ecs::system::EntityCommands;
+use bevy::ecs::system::{Command, EntityCommands};
 
 use crate::{
     bundle::{Insert, Remove},
@@ -100,19 +100,50 @@ impl<T: Reflect, N: DynState> StateBuilder for Box<dyn StateBuilderTyped<T, N>> 
     }
 }
 
-pub(crate) trait OnEvent: Send + Sync {
+#[derive(Debug)]
+pub(crate) enum OnEvent {
+    Entity(Box<dyn EntityEvent>),
+    Command(Box<dyn CommandEvent>),
+}
+
+impl OnEvent {
+    pub(crate) fn trigger(&self, entity: Entity, commands: &mut Commands) {
+        match self {
+            OnEvent::Entity(event) => event.trigger(&mut commands.entity(entity)),
+            OnEvent::Command(event) => event.trigger(commands),
+        }
+    }
+}
+
+pub(crate) trait EntityEvent: Send + Sync {
     fn trigger(&self, entity: &mut EntityCommands);
 }
 
-impl Debug for dyn OnEvent {
+impl Debug for dyn EntityEvent {
     fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
         write!(f, "Fn(&mut EntityCommands)")
     }
 }
 
-impl<F: Fn(&mut EntityCommands) + Send + Sync> OnEvent for F {
+impl<F: Fn(&mut EntityCommands) + Send + Sync> EntityEvent for F {
     fn trigger(&self, entity: &mut EntityCommands) {
         self(entity)
+    }
+}
+
+pub(crate) trait CommandEvent: Command + Sync {
+    fn trigger(&self, commands: &mut Commands);
+}
+
+impl Debug for dyn CommandEvent {
+    fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
+        write!(f, "Command")
+    }
+}
+
+impl<C: Clone + Command + Sync> CommandEvent for C {
+    fn trigger(&self, commands: &mut Commands) {
+        commands.add(self.clone())
     }
 }
 
