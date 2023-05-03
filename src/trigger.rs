@@ -8,16 +8,11 @@ pub use input::{
     PressedTrigger, ReleasedTrigger, ValueTrigger,
 };
 
-use std::{
-    any::TypeId,
-    convert::Infallible,
-    fmt::{self, Debug, Formatter},
-    marker::PhantomData,
-};
+use std::{convert::Infallible, fmt::Debug, marker::PhantomData};
 
-use bevy::ecs::system::{ReadOnlySystemParam, StaticSystemParam, SystemParam};
+use bevy::ecs::system::{ReadOnlySystemParam, SystemParam};
 
-use crate::{prelude::*, set::StateSet};
+use crate::prelude::*;
 
 /// Plugin that must be added for a trigger to be checked. Also registers the [`NotTrigger<T>`]
 /// trigger.
@@ -43,17 +38,8 @@ impl<T: Trigger> Default for TriggerPlugin<T> {
 
 /// Function called by [`TriggerPlugin`]. You may instead call it directly
 /// or use `seldom_fn_plugin`, which is another crate I maintain.
-pub fn trigger_plugin<T: Trigger>(app: &mut App) {
-    app.add_systems((check_trigger::<T>, check_trigger::<NotTrigger<T>>).in_set(StateSet::Trigger))
-        .add_startup_systems((register_trigger::<T>, register_trigger::<NotTrigger<T>>));
-}
-
-pub(crate) fn trigger_plugin_internal(app: &mut App) {
-    app.fn_plugin(trigger_plugin::<AlwaysTrigger>)
-        .fn_plugin(trigger_plugin::<DoneTrigger>)
-        .init_resource::<RegisteredTriggers>()
-        .add_startup_system(validate_triggers)
-        .add_system(remove_done_markers.in_set(StateSet::Transition));
+pub fn trigger_plugin<T: Trigger>(_app: &mut App) {
+    warn!("seldom_state::trigger_plugin is no longer necessary and can be removed.");
 }
 
 /// Wrapper for [`core::convert::Infallible`]. Use for [`Trigger::Err`] if the trigger
@@ -236,64 +222,7 @@ impl DoneTrigger {
     }
 }
 
-pub(crate) trait DynTrigger: Reflect {}
-
-impl Debug for dyn DynTrigger {
-    fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
-        self.as_reflect().fmt(f)
-    }
-}
-
-impl<T: Trigger> DynTrigger for T {}
-
-#[derive(Default, Deref, DerefMut, Resource)]
-pub(crate) struct RegisteredTriggers(Vec<TypeId>);
-
-fn register_trigger<T: Trigger>(mut registered: ResMut<RegisteredTriggers>) {
-    registered.push(TypeId::of::<T>())
-}
-
-fn validate_triggers(
-    machines: Query<&StateMachine, Added<StateMachine>>,
-    registered: Res<RegisteredTriggers>,
-) {
-    for machine in &machines {
-        machine.validate_triggers(&registered)
-    }
-}
-
-fn check_trigger<T: Trigger>(
-    mut machines: Query<(Entity, &mut StateMachine)>,
-    param: StaticSystemParam<T::Param<'_, '_>>,
-) {
-    for (entity, mut machine) in &mut machines {
-        let mut marks = Vec::default();
-
-        for (i, trigger) in machine.get_triggers::<T>(false).into_iter().enumerate() {
-            if let Ok(result) = trigger.trigger(entity, &param) {
-                marks.push((i, result));
-            }
-        }
-
-        for (i, result) in marks {
-            machine.mark_trigger::<T>(i, result, false);
-        }
-
-        marks = Vec::default();
-
-        for (i, trigger) in machine.get_triggers::<T>(true).into_iter().enumerate() {
-            if let Ok(result) = trigger.trigger(entity, &param) {
-                marks.push((i, result));
-            }
-        }
-
-        for (i, result) in marks {
-            machine.mark_trigger::<T>(i, result, true);
-        }
-    }
-}
-
-fn remove_done_markers(mut commands: Commands, dones: Query<Entity, With<Done>>) {
+pub(crate) fn remove_done_markers(mut commands: Commands, dones: Query<Entity, With<Done>>) {
     for done in &dones {
         commands.entity(done).remove::<Done>();
     }

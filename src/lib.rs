@@ -3,16 +3,15 @@
 
 #![warn(missing_docs)]
 
-mod bundle;
 mod machine;
 pub mod set;
 mod state;
 mod trigger;
 
-use machine::machine_plugin;
+use machine::transition_system;
 use prelude::*;
 use set::StateSet;
-use trigger::trigger_plugin_internal;
+use trigger::remove_done_markers;
 
 /// Add to your app to use this crate.
 #[derive(Debug, Default)]
@@ -33,8 +32,8 @@ pub fn state_machine_plugin(app: &mut App) {
                 .in_base_set(CoreSet::PostUpdate)
                 .after(StateSet::Trigger),
         )
-        .fn_plugin(trigger_plugin_internal)
-        .fn_plugin(machine_plugin);
+        .add_system(transition_system.in_set(StateSet::Transition))
+        .add_system(remove_done_markers.in_set(StateSet::Transition));
 }
 
 /// Module for convenient imports. Use with `use seldom_state::prelude::*;`.

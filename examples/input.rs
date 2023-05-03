@@ -57,7 +57,7 @@ fn init(mut commands: Commands, asset_server: Res<AssetServer>) {
             // When the player hits the ground, idle
             .trans::<Falling>(GroundedTrigger, Grounded::Idle)
             // When the player is grounded, set their movement direction
-            .trans_builder::<Grounded, _, _>(ValueTrigger::unbounded(Action::Move), |&value| {
+            .trans_builder::<Grounded, _, _>(ValueTrigger::unbounded(Action::Move), |value| {
                 Some(match value {
                     value if value > 0.5 => Grounded::Right,
                     value if value < -0.5 => Grounded::Left,
