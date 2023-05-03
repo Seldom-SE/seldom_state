@@ -15,7 +15,7 @@ use std::{
     marker::PhantomData,
 };
 
-use bevy::ecs::system::{StaticSystemParam, SystemParam};
+use bevy::ecs::system::{ReadOnlySystemParam, StaticSystemParam, SystemParam};
 
 use crate::{prelude::*, set::StateSet};
 
@@ -30,8 +30,8 @@ use crate::{prelude::*, set::StateSet};
 pub struct TriggerPlugin<T: Trigger>(PhantomData<T>);
 
 impl<T: Trigger> Plugin for TriggerPlugin<T> {
-    fn build(&self, app: &mut App) {
-        app.fn_plugin(trigger_plugin::<T>);
+    fn build(&self, _app: &mut App) {
+        warn!("seldom_state::TriggerPlugin is no longer necessary and can be removed.");
     }
 }
 
@@ -69,7 +69,7 @@ pub struct Never {
 /// for implementing this trait, since it can be tricky.
 pub trait Trigger: 'static + Reflect + Send + Sync {
     /// System parameter provided to [`Trigger::trigger`]. Must not access [`StateMachine`].
-    type Param<'w, 's>: SystemParam;
+    type Param<'w, 's>: ReadOnlySystemParam;
     /// When the trigger occurs, this data is returned from `trigger`, and passed
     /// to every transition builder on this trigger. If there's no relevant information to pass,
     /// just use `()`. If there's also no relevant information to pass to [`Trigger::Err`],
@@ -100,7 +100,7 @@ pub trait Trigger: 'static + Reflect + Send + Sync {
 /// information to pass for [`Trigger::Err`].
 pub trait OptionTrigger: 'static + Reflect + Send + Sync {
     /// System parameter provided to [`OptionTrigger::trigger`]. Must not access [`StateMachine`].
-    type Param<'w, 's>: SystemParam;
+    type Param<'w, 's>: ReadOnlySystemParam;
     /// When the trigger occurs, this data is returned from `trigger`, and passed
     /// to every transition builder on this trigger. If there's no relevant information to pass,
     /// implement [`BoolTrigger`] instead.
@@ -134,7 +134,7 @@ impl<T: OptionTrigger> Trigger for T {
 /// information to pass for [`Trigger::Ok`] and [`Trigger::Err`].
 pub trait BoolTrigger: 'static + Reflect + Send + Sync {
     /// System parameter provided to [`BoolTrigger::trigger`]. Must not access [`StateMachine`].
-    type Param<'w, 's>: SystemParam;
+    type Param<'w, 's>: ReadOnlySystemParam;
 
     /// Called for every entity that may transition to a state on this trigger. Return `true`
     /// if it should transition, and `false` if it should not. In most cases, you may use
@@ -173,8 +173,7 @@ impl Trigger for AlwaysTrigger {
     }
 }
 
-/// Trigger that negates the contained trigger. It works for any trigger that is added
-/// by [`TriggerPlugin`].
+/// Trigger that negates the contained trigger.
 #[derive(Debug, Deref, DerefMut, Reflect)]
 pub struct NotTrigger<T: Trigger>(pub T);
 
