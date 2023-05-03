@@ -1,13 +1,11 @@
 use std::any::{type_name, Any, TypeId};
+use std::collections::HashMap;
 use std::fmt::Debug;
 use std::marker::PhantomData;
 use std::sync::{Arc, Mutex};
 
+use bevy::ecs::system::{Command, EntityCommands};
 use bevy::ecs::system::{CommandQueue, Insert, Remove, SystemState};
-use bevy::{
-    ecs::system::{Command, EntityCommands},
-    utils::HashMap,
-};
 
 use crate::{prelude::*, state::OnEvent};
 
@@ -361,4 +359,74 @@ pub(crate) fn transition_system(world: &mut World) {
         transitions.put_back(machine.as_mut());
     }
     queue.lock().unwrap().apply(world);
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    // Just some test states to transition between.
+
+    #[derive(Component, Clone, Reflect)]
+    struct StateOne;
+    #[derive(Component, Clone, Reflect)]
+    struct StateTwo;
+    #[derive(Component, Clone, Reflect)]
+    struct StateThree;
+
+    #[derive(Resource)]
+    struct SomeResource;
+
+    /// Triggers when SomeResource is present.
+    #[derive(Reflect)]
+    struct ResourcePresent;
+
+    impl BoolTrigger for ResourcePresent {
+        type Param<'w, 's> = Option<Res<'w, SomeResource>>;
+
+        fn trigger(&self, _entity: Entity, param: &Self::Param<'_, '_>) -> bool {
+            param.is_some()
+        }
+    }
+
+    #[test]
+    fn test_machine() {
+        let machine = StateMachine::new(StateOne)
+            .trans::<StateOne>(AlwaysTrigger, StateTwo)
+            .trans::<StateTwo>(ResourcePresent, StateThree);
+        let mut world = World::new();
+
+        let entity = world.spawn((StateOne, machine)).id();
+        transition_system(&mut world);
+        // should have moved to state two
+        assert!(world.get::<StateOne>(entity).is_none());
+        assert!(world.get::<StateTwo>(entity).is_some());
+
+        transition_system(&mut world);
+        // not yet...
+        assert!(world.get::<StateTwo>(entity).is_some());
+        assert!(world.get::<StateThree>(entity).is_none());
+
+        world.insert_resource(SomeResource);
+        transition_system(&mut world);
+        // okay, *now*
+        assert!(world.get::<StateTwo>(entity).is_none());
+        assert!(world.get::<StateThree>(entity).is_some());
+    }
+
+    #[test]
+    fn test_self_transition() {
+        let machine = StateMachine::new(StateOne).trans::<StateOne>(AlwaysTrigger, StateOne);
+        let mut world = World::new();
+
+        let entity = world.spawn((StateOne, machine)).id();
+        transition_system(&mut world);
+        // the sort of bug this is trying to catch: if you insert the new state
+        // and then remove the old state, self-transitions will leave you
+        // without the state
+        assert!(
+            world.get::<StateOne>(entity).is_some(),
+            "transitioning from a state to itself should work"
+        );
+    }
 }
