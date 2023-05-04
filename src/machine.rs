@@ -5,6 +5,7 @@ use std::marker::PhantomData;
 
 use bevy::ecs::system::SystemState;
 use bevy::ecs::system::{Command, EntityCommands};
+use bevy::tasks::{ComputeTaskPool, ParallelSliceMut};
 
 use crate::{prelude::*, state::OnEvent};
 
@@ -298,7 +299,7 @@ impl StateMachine {
 /// Runs all transitions on all entities.
 pub(crate) fn transition_system(
     world: &mut World,
-    system_state: &mut SystemState<Commands>,
+    system_state: &mut SystemState<ParallelCommands>,
     machine_query: &mut QueryState<(Entity, &mut StateMachine)>,
 ) {
     // Pull the machines out of the world so we can invoke mutable methods on
@@ -324,10 +325,14 @@ pub(crate) fn transition_system(
 
     // world is not mutated here; the state machines are not in the world, and
     // the Commands don't mutate until application.
-    let mut commands = system_state.get(world);
-    for (entity, machine) in borrowed_machines.iter_mut() {
-        machine.run(world, *entity, &mut commands)
-    }
+    let par_commands = system_state.get(world);
+    let task_pool = ComputeTaskPool::get();
+    // chunk size of None means to automatically pick
+    borrowed_machines.par_splat_map_mut(task_pool, None, |chunk| {
+        for (entity, machine) in chunk {
+            par_commands.command_scope(|mut commands| machine.run(world, *entity, &mut commands));
+        }
+    });
 
     // put the borrowed machines back
     for (entity, machine) in borrowed_machines {
