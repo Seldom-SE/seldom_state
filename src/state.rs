@@ -81,6 +81,44 @@ impl<C: Clone + Command + Sync> CommandEvent for C {
     }
 }
 
+#[cfg(test)]
+mod tests {
+    use crate::machine::transition_system;
+
+    use super::*;
+
+    #[derive(Component, Clone, Reflect)]
+    struct StateOne;
+    #[derive(Component, Clone, Reflect)]
+    struct StateTwo;
+
+    #[derive(Resource, Clone)]
+    struct SomeResource;
+    #[derive(Resource, Clone)]
+    struct AnotherResource;
+
+    #[test]
+    fn test_triggers() {
+        let machine = StateMachine::new(StateOne)
+            .trans::<StateOne>(AlwaysTrigger, StateTwo)
+            .on_exit::<StateOne>(|commands| commands.commands().insert_resource(SomeResource))
+            .on_enter::<StateTwo>(|commands| commands.commands().insert_resource(AnotherResource));
+
+        let mut world = World::new();
+        let entity = world.spawn((StateOne, machine)).id();
+        transition_system(&mut world);
+        assert!(world.get::<StateTwo>(entity).is_some());
+        assert!(
+            world.contains_resource::<SomeResource>(),
+            "exit state triggers should run"
+        );
+        assert!(
+            world.contains_resource::<AnotherResource>(),
+            "exit state triggers should run"
+        );
+    }
+}
+
 // An attempt to rebuild the state bundle from the world:
 
 // struct StateMarker<T: MachineState>(PhantomData<T>);
