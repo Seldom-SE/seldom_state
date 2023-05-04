@@ -228,49 +228,40 @@ impl StateMachine {
         self
     }
 
-    /// Updates the machine's state. Does *not* run the on_foo triggers.
-    fn update_state(&mut self, next_state: TypeId, entity: Entity, commands: &mut Commands) {
-        let from = &self.states[&self.current];
-        let to = &self.states[&next_state];
-        for event in from.on_exit.iter() {
-            event.trigger(entity, commands);
-        }
-        for event in to.on_enter.iter() {
-            event.trigger(entity, commands);
-        }
-        if self.log_transitions {
-            info!("{entity:?} transitioned from {} to {}", from.name, to.name);
-        }
-        self.current = next_state;
+    /// Get the list of transitions for the current state.
+    fn transitions_mut(&mut self) -> &mut Vec<Box<dyn Transition>> {
+        &mut self.states.get_mut(&self.current).unwrap().transitions
     }
 
     /// Initialize all transitions. Must be executed before `run`. This is
     /// separate because `run` is parallelizable (takes a `&World`) but this
     /// isn't (takes a `&mut World`).
     fn initialize(&mut self, world: &mut World) {
-        for transition in self
-            .states
-            .get_mut(&self.current)
-            .unwrap()
-            .transitions
-            .iter_mut()
-        {
+        for transition in self.transitions_mut() {
             transition.initialize(world);
         }
     }
 
-    /// Runs all transitions until one is actually taken. If one was taken,
-    /// stores the new state in this so we can update the machine in `put_back`.
+    /// Runs all transitions until one is actually taken. If one is taken, logs
+    /// the transition and runs `on_enter/on_exit` triggers.
     fn run(&mut self, world: &World, entity: Entity, commands: &mut Commands) {
         let next_state = self
-            .states
-            .get_mut(&self.current)
-            .unwrap()
-            .transitions
+            .transitions_mut()
             .iter_mut()
             .find_map(|transition| transition.run(world, &mut commands.entity(entity)));
         if let Some(next_state) = next_state {
-            self.update_state(next_state, entity, commands);
+            let from = &self.states[&self.current];
+            let to = &self.states[&next_state];
+            for event in from.on_exit.iter() {
+                event.trigger(entity, commands);
+            }
+            for event in to.on_enter.iter() {
+                event.trigger(entity, commands);
+            }
+            if self.log_transitions {
+                info!("{entity:?} transitioned from {} to {}", from.name, to.name);
+            }
+            self.current = next_state;
         }
     }
 
@@ -284,10 +275,14 @@ impl StateMachine {
 }
 
 /// Runs all transitions on all entities.
-pub(crate) fn transition_system(world: &mut World, system_state: &mut SystemState<Commands>) {
-    // pull the transitions out of the world
-    let mut query = world.query::<(Entity, &mut StateMachine)>();
-    let mut borrowed_machines: Vec<(Entity, StateMachine)> = query
+pub(crate) fn transition_system(
+    world: &mut World,
+    system_state: &mut SystemState<Commands>,
+    machine_query: &mut QueryState<(Entity, &mut StateMachine)>,
+) {
+    // pull the transitions out of the world. since the state machine is mostly
+    // on the heap, this isn't expensive.
+    let mut borrowed_machines: Vec<(Entity, StateMachine)> = machine_query
         .iter_mut(world)
         .map(|(entity, mut machine)| {
             (
@@ -297,20 +292,25 @@ pub(crate) fn transition_system(world: &mut World, system_state: &mut SystemStat
         })
         .collect();
 
+    // world is mutable here, since initialization require mutating the world
     for (_, machine) in borrowed_machines.iter_mut() {
         machine.initialize(world);
     }
 
+    // world is not mutated here; the state machines are not in the world, and
+    // the Commands don't mutate until application
     let mut commands = system_state.get(world);
     for (entity, machine) in borrowed_machines.iter_mut() {
         machine.run(world, *entity, &mut commands)
     }
 
+    // put the borrowed machines back
     for (entity, machine) in borrowed_machines {
-        let mut dummy = query.get_mut(world, entity).unwrap().1;
+        let mut dummy = machine_query.get_mut(world, entity).unwrap().1;
         *dummy = machine;
     }
 
+    // necessary to actually *apply* the commands we've enqueued
     system_state.apply(world);
 }
 
