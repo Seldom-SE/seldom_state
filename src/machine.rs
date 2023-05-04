@@ -111,26 +111,34 @@ impl StateMetadata {
     }
 }
 
+/// The TypeId of a 'dummy' state machine we leave behind when borrowing in the system.
 struct DummyMarkerTypeId;
+
+/// Used to insert the initial state on the first pass through the system.
+type StateInserter = Box<dyn FnOnce(&mut World, Entity) + Send + Sync + 'static>;
 
 /// State machine component. Entities with this component will have bundles (the states)
 /// added and removed based on the transitions that you add. Build one
 /// with `StateMachine::new`, `StateMachine::trans`, and other methods.
-#[derive(Component, Debug)]
+#[derive(Component)]
 pub struct StateMachine {
     current: TypeId,
     states: HashMap<TypeId, StateMetadata>,
     log_transitions: bool,
+    initial_inserter: Option<StateInserter>,
 }
 
 impl StateMachine {
     /// Creates a state machine with an initial state and no transitions. Add more
     /// with [`StateMachine::trans`].
-    pub fn new(initial: impl MachineState) -> Self {
+    pub fn new<S: MachineState>(initial: S) -> Self {
         Self {
             current: initial.type_id(),
-            states: HashMap::new(),
+            states: HashMap::from([(initial.type_id(), StateMetadata::new::<S>())]),
             log_transitions: false,
+            initial_inserter: Some(Box::new(|world, entity| {
+                world.get_entity_mut(entity).unwrap().insert(initial);
+            })),
         }
     }
 
@@ -270,6 +278,7 @@ impl StateMachine {
             current: TypeId::of::<DummyMarkerTypeId>(),
             states: default(),
             log_transitions: false,
+            initial_inserter: None,
         }
     }
 }
@@ -293,8 +302,11 @@ pub(crate) fn transition_system(
         .collect();
 
     // world is mutable here, since initialization require mutating the world
-    for (_, machine) in borrowed_machines.iter_mut() {
+    for (entity, machine) in borrowed_machines.iter_mut() {
         machine.initialize(world);
+        if let Some(inserter) = machine.initial_inserter.take() {
+            inserter(world, *entity);
+        }
     }
 
     // world is not mutated here; the state machines are not in the world, and
@@ -343,15 +355,29 @@ mod tests {
     }
 
     #[test]
+    fn test_sets_initial_state() {
+        let mut app = App::new();
+        app.add_system(transition_system);
+        let machine = StateMachine::new(StateOne);
+        let entity = app.world.spawn(machine).id();
+        app.update();
+        // should have moved to state two
+        assert!(
+            app.world.get::<StateOne>(entity).is_some(),
+            "StateMachine should insert the initial component"
+        );
+    }
+
+    #[test]
     fn test_machine() {
-        let machine = StateMachine::new(StateOne)
-            .trans::<StateOne>(AlwaysTrigger, StateTwo)
-            .trans::<StateTwo>(ResourcePresent, StateThree);
         let mut app = App::new();
         app.add_system(transition_system);
 
-        let entity = app.world.spawn((StateOne, machine)).id();
-        app.update();
+        let machine = StateMachine::new(StateOne)
+            .trans::<StateOne>(AlwaysTrigger, StateTwo)
+            .trans::<StateTwo>(ResourcePresent, StateThree);
+        let entity = app.world.spawn(machine).id();
+
         app.update();
         // should have moved to state two
         assert!(app.world.get::<StateOne>(entity).is_none());
@@ -371,11 +397,13 @@ mod tests {
 
     #[test]
     fn test_self_transition() {
-        let machine = StateMachine::new(StateOne).trans::<StateOne>(AlwaysTrigger, StateOne);
         let mut app = App::new();
         app.add_system(transition_system);
 
-        let entity = app.world.spawn((StateOne, machine)).id();
+        let entity = app
+            .world
+            .spawn(StateMachine::new(StateOne).trans::<StateOne>(AlwaysTrigger, StateOne))
+            .id();
         app.update();
         // the sort of bug this is trying to catch: if you insert the new state
         // and then remove the old state, self-transitions will leave you

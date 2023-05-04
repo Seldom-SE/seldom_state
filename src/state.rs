@@ -107,7 +107,7 @@ mod tests {
             .on_exit::<StateOne>(|commands| commands.commands().insert_resource(SomeResource))
             .on_enter::<StateTwo>(|commands| commands.commands().insert_resource(AnotherResource));
 
-        let entity = app.world.spawn((StateOne, machine)).id();
+        let entity = app.world.spawn(machine).id();
         app.update();
         assert!(app.world.get::<StateTwo>(entity).is_some());
         assert!(
