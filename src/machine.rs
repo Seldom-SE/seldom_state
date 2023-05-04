@@ -2,7 +2,6 @@ use std::any::{type_name, Any, TypeId};
 use std::collections::HashMap;
 use std::fmt::Debug;
 use std::marker::PhantomData;
-use std::sync::{Arc, Mutex};
 
 use bevy::ecs::system::SystemState;
 use bevy::ecs::system::{Command, EntityCommands};
@@ -300,11 +299,12 @@ impl Transitions {
 
     /// Runs all transitions until one is actually taken. If one was taken,
     /// stores the new state in this so we can update the machine in `put_back`.
-    fn run(&mut self, world: &World, commands: Arc<Mutex<Commands>>) {
-        self.new_state = self.metadata.transitions.iter_mut().find_map(|transition| {
-            let mut commands = commands.lock().unwrap();
-            transition.run(world, &mut commands.entity(self.entity))
-        });
+    fn run(&mut self, world: &World, commands: &mut Commands) {
+        self.new_state = self
+            .metadata
+            .transitions
+            .iter_mut()
+            .find_map(|transition| transition.run(world, &mut commands.entity(self.entity)));
     }
 }
 
@@ -324,15 +324,14 @@ pub(crate) fn transition_system(world: &mut World, system_state: &mut SystemStat
         transition.initialize(world);
     }
 
-    let commands = system_state.get(world);
-    let commands = Arc::new(Mutex::new(commands));
+    let mut commands = system_state.get(world);
     {
         // reborrow as immutable just to show that we can
         let world: &World = world;
 
         // TODO: do this in parallel.
         for transitions in to_invoke.iter_mut() {
-            transitions.run(world, Arc::clone(&commands));
+            transitions.run(world, &mut commands);
         }
     }
 
