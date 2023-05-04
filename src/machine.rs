@@ -134,7 +134,10 @@ impl StateMachine {
     pub fn new<S: MachineState>(initial: S) -> Self {
         Self {
             current: initial.type_id(),
-            states: HashMap::from([(initial.type_id(), StateMetadata::new::<S>())]),
+            states: HashMap::from([
+                (initial.type_id(), StateMetadata::new::<S>()),
+                (TypeId::of::<AnyState>(), StateMetadata::new::<AnyState>()),
+            ]),
             log_transitions: false,
             initial_inserter: Some(Box::new(|world, entity| {
                 world.get_entity_mut(entity).unwrap().insert(initial);
@@ -237,8 +240,23 @@ impl StateMachine {
     }
 
     /// Get the list of transitions for the current state.
-    fn transitions_mut(&mut self) -> &mut Vec<Box<dyn Transition>> {
-        &mut self.states.get_mut(&self.current).unwrap().transitions
+    fn transitions_mut(&mut self) -> impl Iterator<Item = &mut Box<dyn Transition>> {
+        self.states
+            .get_mut(&self.current)
+            .unwrap()
+            .transitions
+            .iter_mut()
+    }
+
+    /// Get the list of transitions for the special AnyState.
+    // Unfortunately, I don't think there's a nice way to iterate over this
+    // *and* transitions_mut at once without writing our own iterator.
+    fn any_state_transitions_mut(&mut self) -> impl Iterator<Item = &mut Box<dyn Transition>> {
+        self.states
+            .get_mut(&TypeId::of::<AnyState>())
+            .unwrap()
+            .transitions
+            .iter_mut()
     }
 
     /// Initialize all transitions. Must be executed before `run`. This is
@@ -248,15 +266,22 @@ impl StateMachine {
         for transition in self.transitions_mut() {
             transition.initialize(world);
         }
+        for transition in self.any_state_transitions_mut() {
+            transition.initialize(world);
+        }
     }
 
     /// Runs all transitions until one is actually taken. If one is taken, logs
     /// the transition and runs `on_enter/on_exit` triggers.
     fn run(&mut self, world: &World, entity: Entity, commands: &mut Commands) {
-        let next_state = self
+        let mut next_state = self
             .transitions_mut()
-            .iter_mut()
             .find_map(|transition| transition.run(world, &mut commands.entity(entity)));
+        if next_state.is_none() {
+            next_state = self
+                .any_state_transitions_mut()
+                .find_map(|transition| transition.run(world, &mut commands.entity(entity)));
+        }
         if let Some(next_state) = next_state {
             let from = &self.states[&self.current];
             let to = &self.states[&next_state];
