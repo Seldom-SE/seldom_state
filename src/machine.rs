@@ -165,6 +165,10 @@ impl StateMachine {
             .or_insert(StateMetadata::new::<P>())
             .transitions
             .push(Box::new(transition) as Box<dyn Transition>);
+        // ensure that the target also has metadata so we can run on-enter etc
+        self.states
+            .entry(TypeId::of::<N>())
+            .or_insert(StateMetadata::new::<N>());
         self
     }
 
@@ -234,18 +238,19 @@ impl StateMachine {
         self
     }
 
-    /// Updates the machine's state. Runs on_enter/exit triggers, but does
-    /// *not* actually insert or remove components (including the old
-    /// state). `entity` must point to the entity this state machine is on.
-    fn update_state(&mut self, next_state: TypeId, entity: Entity, commands: &mut Commands) {
+    fn run_events(&self, from: TypeId, to: TypeId, entity: Entity, commands: &mut Commands) {
+        for event in self.states[&from].on_exit.iter() {
+            event.trigger(entity, commands);
+        }
+        for event in self.states[&to].on_enter.iter() {
+            event.trigger(entity, commands);
+        }
+    }
+
+    /// Updates the machine's state. Does *not* run the on_foo triggers.
+    fn update_state(&mut self, next_state: TypeId, entity: Entity) {
         let from = &self.states[&self.current];
         let to = &self.states[&next_state];
-        for event in from.on_exit.iter() {
-            event.trigger(entity, commands);
-        }
-        for event in to.on_enter.iter() {
-            event.trigger(entity, commands);
-        }
         if self.log_transitions {
             info!("{entity:?} transitioned from {} to {}", from.name, to.name);
         }
@@ -282,10 +287,10 @@ impl Transitions {
     /// back the state.
     fn put_back(mut self, machine: &mut StateMachine) {
         let transitions = machine.states.get_mut(&self.old_state).unwrap();
-        if let Some(new_state) = self.new_state {
-            machine.current = new_state;
-        }
         std::mem::swap(transitions, &mut self.metadata);
+        if let Some(new_state) = self.new_state {
+            machine.update_state(new_state, self.entity);
+        }
     }
 
     /// Initialize all transitions. Must be executed before `run`. This is
@@ -324,11 +329,11 @@ pub(crate) fn transition_system(world: &mut World, system_state: &mut SystemStat
         transition.initialize(world);
     }
 
-    let mut commands = system_state.get(world);
     {
         // reborrow as immutable just to show that we can
         let world: &World = world;
 
+        let mut commands = system_state.get(world);
         // TODO: do this in parallel.
         for transitions in to_invoke.iter_mut() {
             transitions.run(world, &mut commands);
@@ -336,11 +341,19 @@ pub(crate) fn transition_system(world: &mut World, system_state: &mut SystemStat
     }
 
     for transitions in to_invoke {
-        let (_, mut machine) = query.get_mut(world, transitions.entity).unwrap();
+        let entity = transitions.entity;
+        let old_state = transitions.old_state;
         let next_state = transitions.new_state;
-        transitions.put_back(machine.as_mut());
-        if let Some(next_state) = next_state {
-            machine.current = next_state;
+        {
+            let (_, mut machine) = query.get_mut(world, transitions.entity).unwrap();
+            transitions.put_back(machine.as_mut());
+        }
+        {
+            let mut commands = system_state.get(world);
+            let (_, machine) = query.get(world, entity).unwrap();
+            if let Some(next_state) = next_state {
+                machine.run_events(old_state, next_state, entity, &mut commands)
+            }
         }
     }
     system_state.apply(world);
