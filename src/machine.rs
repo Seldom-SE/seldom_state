@@ -111,9 +111,6 @@ impl StateMetadata {
     }
 }
 
-/// The TypeId of a 'dummy' state machine we leave behind when borrowing in the system.
-struct DummyMarkerTypeId;
-
 /// Used to insert the initial state on the first pass through the system.
 type StateInserter = Box<dyn FnOnce(&mut World, Entity) + Send + Sync + 'static>;
 
@@ -279,9 +276,11 @@ impl StateMachine {
         }
     }
 
-    fn dummy() -> Self {
+    /// When running the transition system, we replace all StateMachines in the
+    /// world with their stub.
+    fn stub(&self) -> Self {
         Self {
-            current: TypeId::of::<DummyMarkerTypeId>(),
+            current: self.current,
             states: default(),
             log_transitions: false,
             transitions: default(),
@@ -296,14 +295,16 @@ pub(crate) fn transition_system(
     system_state: &mut SystemState<Commands>,
     machine_query: &mut QueryState<(Entity, &mut StateMachine)>,
 ) {
-    // Pull the machines out of the world so we can invoke mutable methods on them.
+    // Pull the machines out of the world so we can invoke mutable methods on
+    // them. The alternative would be to wrap the entire StateMachine in an
+    // Arc<Mutex<>>, but that would complicate the API surface and you wouldn't
+    // be able to do anything more anyway (since you'd need to lock the mutex
+    // anyway).
     let mut borrowed_machines: Vec<(Entity, StateMachine)> = machine_query
         .iter_mut(world)
         .map(|(entity, mut machine)| {
-            (
-                entity,
-                std::mem::replace(machine.as_mut(), StateMachine::dummy()),
-            )
+            let stub = machine.stub();
+            (entity, std::mem::replace(machine.as_mut(), stub))
         })
         .collect();
 
@@ -324,8 +325,7 @@ pub(crate) fn transition_system(
 
     // put the borrowed machines back
     for (entity, machine) in borrowed_machines {
-        let mut dummy = machine_query.get_mut(world, entity).unwrap().1;
-        *dummy = machine;
+        *machine_query.get_mut(world, entity).unwrap().1 = machine;
     }
 
     // necessary to actually *apply* the commands we've enqueued
