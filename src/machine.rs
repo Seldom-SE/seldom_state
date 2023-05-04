@@ -92,10 +92,11 @@ where
     }
 }
 
+/// Stores information about each state type.
 #[derive(Debug)]
 struct StateMetadata {
+    /// Used for better debug information.
     name: String,
-    transitions: Vec<Box<dyn Transition>>,
     on_enter: Vec<OnEvent>,
     on_exit: Vec<OnEvent>,
 }
@@ -104,7 +105,6 @@ impl StateMetadata {
     fn new<S: Bundle>() -> Self {
         Self {
             name: type_name::<S>().to_owned(),
-            transitions: default(),
             on_enter: default(),
             on_exit: default(),
         }
@@ -124,6 +124,11 @@ type StateInserter = Box<dyn FnOnce(&mut World, Entity) + Send + Sync + 'static>
 pub struct StateMachine {
     current: TypeId,
     states: HashMap<TypeId, StateMetadata>,
+    // We store the transitions in a flat list so that we ensure we always
+    // check them in the right order; storing them in each StateMetadata would
+    // mean that e.g. we'd have to check every AnyState trigger before any
+    // state-specific trigger or vice versa.
+    transitions: Vec<(TypeId, Box<dyn Transition>)>,
     log_transitions: bool,
     initial_inserter: Option<StateInserter>,
 }
@@ -138,11 +143,18 @@ impl StateMachine {
                 (initial.type_id(), StateMetadata::new::<S>()),
                 (TypeId::of::<AnyState>(), StateMetadata::new::<AnyState>()),
             ]),
+            transitions: vec![],
             log_transitions: false,
             initial_inserter: Some(Box::new(|world, entity| {
                 world.get_entity_mut(entity).unwrap().insert(initial);
             })),
         }
+    }
+
+    fn metadata_mut<S: MachineState>(&mut self) -> &mut StateMetadata {
+        self.states
+            .entry(TypeId::of::<S>())
+            .or_insert(StateMetadata::new::<S>())
     }
 
     /// Adds a transition to the state machine. When the entity is in the state
@@ -160,16 +172,13 @@ impl StateMachine {
         trigger: T,
         builder: impl 'static + Clone + Fn(T::Ok) -> Option<N> + Send + Sync,
     ) -> Self {
+        self.metadata_mut::<P>();
+        self.metadata_mut::<N>();
         let transition: TransitionImpl<T, P, _, N> = TransitionImpl::new(trigger, builder);
-        self.states
-            .entry(TypeId::of::<P>())
-            .or_insert(StateMetadata::new::<P>())
-            .transitions
-            .push(Box::new(transition) as Box<dyn Transition>);
-        // ensure that the target also has metadata so we can run on-enter etc
-        self.states
-            .entry(TypeId::of::<N>())
-            .or_insert(StateMetadata::new::<N>());
+        self.transitions.push((
+            TypeId::of::<P>(),
+            Box::new(transition) as Box<dyn Transition>,
+        ));
         self
     }
 
@@ -179,9 +188,7 @@ impl StateMachine {
         mut self,
         on_enter: impl 'static + Fn(&mut EntityCommands) + Send + Sync,
     ) -> Self {
-        self.states
-            .entry(TypeId::of::<S>())
-            .or_insert(StateMetadata::new::<S>())
+        self.metadata_mut::<S>()
             .on_enter
             .push(OnEvent::Entity(Box::new(on_enter)));
 
@@ -194,9 +201,7 @@ impl StateMachine {
         mut self,
         on_exit: impl 'static + Fn(&mut EntityCommands) + Send + Sync,
     ) -> Self {
-        self.states
-            .entry(TypeId::of::<S>())
-            .or_insert(StateMetadata::new::<S>())
+        self.metadata_mut::<S>()
             .on_exit
             .push(OnEvent::Entity(Box::new(on_exit)));
 
@@ -209,9 +214,7 @@ impl StateMachine {
         mut self,
         command: impl Clone + Command + Sync,
     ) -> Self {
-        self.states
-            .entry(TypeId::of::<S>())
-            .or_insert(StateMetadata::new::<S>())
+        self.metadata_mut::<S>()
             .on_enter
             .push(OnEvent::Command(Box::new(command)));
 
@@ -224,9 +227,7 @@ impl StateMachine {
         mut self,
         command: impl Clone + Command + Sync,
     ) -> Self {
-        self.states
-            .entry(TypeId::of::<S>())
-            .or_insert(StateMetadata::new::<S>())
+        self.metadata_mut::<S>()
             .on_exit
             .push(OnEvent::Command(Box::new(command)));
 
@@ -241,22 +242,10 @@ impl StateMachine {
 
     /// Get the list of transitions for the current state.
     fn transitions_mut(&mut self) -> impl Iterator<Item = &mut Box<dyn Transition>> {
-        self.states
-            .get_mut(&self.current)
-            .unwrap()
-            .transitions
+        self.transitions
             .iter_mut()
-    }
-
-    /// Get the list of transitions for the special AnyState.
-    // Unfortunately, I don't think there's a nice way to iterate over this
-    // *and* transitions_mut at once without writing our own iterator.
-    fn any_state_transitions_mut(&mut self) -> impl Iterator<Item = &mut Box<dyn Transition>> {
-        self.states
-            .get_mut(&TypeId::of::<AnyState>())
-            .unwrap()
-            .transitions
-            .iter_mut()
+            .filter(|(type_id, _)| *type_id == self.current || *type_id == TypeId::of::<AnyState>())
+            .map(|(_, transition)| transition)
     }
 
     /// Initialize all transitions. Must be executed before `run`. This is
@@ -266,22 +255,14 @@ impl StateMachine {
         for transition in self.transitions_mut() {
             transition.initialize(world);
         }
-        for transition in self.any_state_transitions_mut() {
-            transition.initialize(world);
-        }
     }
 
     /// Runs all transitions until one is actually taken. If one is taken, logs
     /// the transition and runs `on_enter/on_exit` triggers.
     fn run(&mut self, world: &World, entity: Entity, commands: &mut Commands) {
-        let mut next_state = self
+        let next_state = self
             .transitions_mut()
             .find_map(|transition| transition.run(world, &mut commands.entity(entity)));
-        if next_state.is_none() {
-            next_state = self
-                .any_state_transitions_mut()
-                .find_map(|transition| transition.run(world, &mut commands.entity(entity)));
-        }
         if let Some(next_state) = next_state {
             let from = &self.states[&self.current];
             let to = &self.states[&next_state];
@@ -303,6 +284,7 @@ impl StateMachine {
             current: TypeId::of::<DummyMarkerTypeId>(),
             states: default(),
             log_transitions: false,
+            transitions: default(),
             initial_inserter: None,
         }
     }
@@ -314,8 +296,7 @@ pub(crate) fn transition_system(
     system_state: &mut SystemState<Commands>,
     machine_query: &mut QueryState<(Entity, &mut StateMachine)>,
 ) {
-    // pull the transitions out of the world. since the state machine is mostly
-    // on the heap, this isn't expensive.
+    // Pull the machines out of the world so we can invoke mutable methods on them.
     let mut borrowed_machines: Vec<(Entity, StateMachine)> = machine_query
         .iter_mut(world)
         .map(|(entity, mut machine)| {
@@ -335,7 +316,7 @@ pub(crate) fn transition_system(
     }
 
     // world is not mutated here; the state machines are not in the world, and
-    // the Commands don't mutate until application
+    // the Commands don't mutate until application.
     let mut commands = system_state.get(world);
     for (entity, machine) in borrowed_machines.iter_mut() {
         machine.run(world, *entity, &mut commands)
