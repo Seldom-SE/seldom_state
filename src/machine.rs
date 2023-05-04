@@ -106,9 +106,7 @@ impl StateMetadata {
             name: type_name::<S>().to_owned(),
             transitions: default(),
             on_enter: default(),
-            on_exit: vec![OnEvent::Entity(Box::new(|entity: &mut EntityCommands| {
-                entity.remove::<S>();
-            }))],
+            on_exit: default(),
         }
     }
 
