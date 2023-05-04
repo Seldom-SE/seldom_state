@@ -4,50 +4,10 @@ use std::fmt::Debug;
 use std::marker::PhantomData;
 use std::sync::{Arc, Mutex};
 
+use bevy::ecs::system::SystemState;
 use bevy::ecs::system::{Command, EntityCommands};
-use bevy::ecs::system::{CommandQueue, Insert, Remove, SystemState};
 
 use crate::{prelude::*, state::OnEvent};
-
-/// Wrapper to ensure that a transition can only do one thing: insert a single
-/// component.
-struct QueueWrapper<'a> {
-    entity: Entity,
-    queue: Arc<Mutex<CommandQueue>>,
-    // TypeId of the component that was inserted.
-    inserted: &'a mut Option<TypeId>,
-}
-
-impl<'a> QueueWrapper<'a> {
-    fn new(
-        entity: Entity,
-        queue: Arc<Mutex<CommandQueue>>,
-        inserted: &'a mut Option<TypeId>,
-    ) -> Self {
-        *inserted = None;
-        Self {
-            entity,
-            queue,
-            inserted,
-        }
-    }
-
-    /// Enqueues a command inserting the given component on `self.entity` and
-    /// sets `self.inserted` to true. Takes `self` by value to ensure you can't
-    /// run this more than once.
-    fn update<Prev: Component, Next: Component>(self, component: Next) {
-        let mut queue = self.queue.lock().unwrap();
-        queue.push(Remove {
-            entity: self.entity,
-            phantom: PhantomData::<Prev>,
-        });
-        queue.push(Insert {
-            entity: self.entity,
-            bundle: component,
-        });
-        *self.inserted = Some(TypeId::of::<Next>());
-    }
-}
 
 /// This represents something that can be used to perform a transition. We have
 /// a trait for this so we can box it up.
@@ -56,8 +16,8 @@ trait Transition: Debug + Send + Sync + 'static {
     fn initialize(&mut self, world: &mut World);
     /// Check whether the transition should be taken. `entity` is the entity
     /// that contains the state machine. If you want to take the transition,
-    /// invoke `QueueWrapper::insert`.
-    fn run(&mut self, world: &World, entity: Entity, add_state: QueueWrapper);
+    /// use `commands.insert` and return the TypeId you inserted.
+    fn run(&mut self, world: &World, commands: &mut EntityCommands) -> Option<TypeId>;
 }
 
 /// This represents an edge in the state machine. The type parameters represent
@@ -120,13 +80,16 @@ where
         self.system_state = Some(SystemState::new(world));
     }
 
-    fn run(&mut self, world: &World, entity: Entity, add_state: QueueWrapper) {
+    fn run(&mut self, world: &World, entity: &mut EntityCommands) -> Option<TypeId> {
         let state = self.system_state.as_mut().unwrap();
-        if let Ok(res) = self.trigger.trigger(entity, &state.get(world)) {
+        if let Ok(res) = self.trigger.trigger(entity.id(), &state.get(world)) {
             if let Some(next) = (self.builder)(res) {
-                add_state.update::<Prev, _>(next);
+                entity.remove::<Prev>();
+                entity.insert(next);
+                return Some(TypeId::of::<Next>());
             }
         }
+        None
     }
 }
 
@@ -144,8 +107,9 @@ impl StateMetadata {
             name: type_name::<S>().to_owned(),
             transitions: default(),
             on_enter: default(),
-            // removing S on exit is already taken care of by the the system
-            on_exit: default(),
+            on_exit: vec![OnEvent::Entity(Box::new(|entity: &mut EntityCommands| {
+                entity.remove::<S>();
+            }))],
         }
     }
 
@@ -336,17 +300,16 @@ impl Transitions {
 
     /// Runs all transitions until one is actually taken. If one was taken,
     /// stores the new state in this so we can update the machine in `put_back`.
-    fn run(&mut self, world: &World, queue: Arc<Mutex<CommandQueue>>) {
-        self.metadata.transitions.iter_mut().find_map(|transition| {
-            let wrapper = QueueWrapper::new(self.entity, Arc::clone(&queue), &mut self.new_state);
-            transition.run(world, self.entity, wrapper);
-            self.new_state
+    fn run(&mut self, world: &World, commands: Arc<Mutex<Commands>>) {
+        self.new_state = self.metadata.transitions.iter_mut().find_map(|transition| {
+            let mut commands = commands.lock().unwrap();
+            transition.run(world, &mut commands.entity(self.entity))
         });
     }
 }
 
 /// Runs all transitions on all entities.
-pub(crate) fn transition_system(world: &mut World) {
+pub(crate) fn transition_system(world: &mut World, system_state: &mut SystemState<Commands>) {
     // pull the transitions out of the world
     let mut query = world.query::<(Entity, &mut StateMachine)>();
     let mut to_invoke: Vec<Transitions> = query
@@ -361,22 +324,27 @@ pub(crate) fn transition_system(world: &mut World) {
         transition.initialize(world);
     }
 
-    let queue = Arc::new(Mutex::new(CommandQueue::default()));
+    let commands = system_state.get(world);
+    let commands = Arc::new(Mutex::new(commands));
     {
         // reborrow as immutable just to show that we can
         let world: &World = world;
 
         // TODO: do this in parallel.
         for transitions in to_invoke.iter_mut() {
-            transitions.run(world, Arc::clone(&queue));
+            transitions.run(world, Arc::clone(&commands));
         }
     }
 
     for transitions in to_invoke {
         let (_, mut machine) = query.get_mut(world, transitions.entity).unwrap();
+        let next_state = transitions.new_state;
         transitions.put_back(machine.as_mut());
+        if let Some(next_state) = next_state {
+            machine.current = next_state;
+        }
     }
-    queue.lock().unwrap().apply(world);
+    system_state.apply(world);
 }
 
 #[cfg(test)]
@@ -412,38 +380,41 @@ mod tests {
         let machine = StateMachine::new(StateOne)
             .trans::<StateOne>(AlwaysTrigger, StateTwo)
             .trans::<StateTwo>(ResourcePresent, StateThree);
-        let mut world = World::new();
+        let mut app = App::new();
+        app.add_system(transition_system);
 
-        let entity = world.spawn((StateOne, machine)).id();
-        transition_system(&mut world);
+        let entity = app.world.spawn((StateOne, machine)).id();
+        app.update();
+        app.update();
         // should have moved to state two
-        assert!(world.get::<StateOne>(entity).is_none());
-        assert!(world.get::<StateTwo>(entity).is_some());
+        assert!(app.world.get::<StateOne>(entity).is_none());
+        assert!(app.world.get::<StateTwo>(entity).is_some());
 
-        transition_system(&mut world);
+        app.update();
         // not yet...
-        assert!(world.get::<StateTwo>(entity).is_some());
-        assert!(world.get::<StateThree>(entity).is_none());
+        assert!(app.world.get::<StateTwo>(entity).is_some());
+        assert!(app.world.get::<StateThree>(entity).is_none());
 
-        world.insert_resource(SomeResource);
-        transition_system(&mut world);
+        app.world.insert_resource(SomeResource);
+        app.update();
         // okay, *now*
-        assert!(world.get::<StateTwo>(entity).is_none());
-        assert!(world.get::<StateThree>(entity).is_some());
+        assert!(app.world.get::<StateTwo>(entity).is_none());
+        assert!(app.world.get::<StateThree>(entity).is_some());
     }
 
     #[test]
     fn test_self_transition() {
         let machine = StateMachine::new(StateOne).trans::<StateOne>(AlwaysTrigger, StateOne);
-        let mut world = World::new();
+        let mut app = App::new();
+        app.add_system(transition_system);
 
-        let entity = world.spawn((StateOne, machine)).id();
-        transition_system(&mut world);
+        let entity = app.world.spawn((StateOne, machine)).id();
+        app.update();
         // the sort of bug this is trying to catch: if you insert the new state
         // and then remove the old state, self-transitions will leave you
         // without the state
         assert!(
-            world.get::<StateOne>(entity).is_some(),
+            app.world.get::<StateOne>(entity).is_some(),
             "transitioning from a state to itself should work"
         );
     }

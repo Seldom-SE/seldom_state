@@ -99,21 +99,23 @@ mod tests {
 
     #[test]
     fn test_triggers() {
+        let mut app = App::new();
+        app.add_system(transition_system);
+
         let machine = StateMachine::new(StateOne)
             .trans::<StateOne>(AlwaysTrigger, StateTwo)
             .on_exit::<StateOne>(|commands| commands.commands().insert_resource(SomeResource))
             .on_enter::<StateTwo>(|commands| commands.commands().insert_resource(AnotherResource));
 
-        let mut world = World::new();
-        let entity = world.spawn((StateOne, machine)).id();
-        transition_system(&mut world);
-        assert!(world.get::<StateTwo>(entity).is_some());
+        let entity = app.world.spawn((StateOne, machine)).id();
+        app.update();
+        assert!(app.world.get::<StateTwo>(entity).is_some());
         assert!(
-            world.contains_resource::<SomeResource>(),
+            app.world.contains_resource::<SomeResource>(),
             "exit state triggers should run"
         );
         assert!(
-            world.contains_resource::<AnotherResource>(),
+            app.world.contains_resource::<AnotherResource>(),
             "exit state triggers should run"
         );
     }
