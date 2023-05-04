@@ -109,17 +109,9 @@ impl StateMetadata {
             on_exit: default(),
         }
     }
-
-    // We temporarily replace the StateMetadata with this during machine execution.
-    fn dummy() -> Self {
-        Self {
-            name: "StateMetadata is being borrowed".to_owned(),
-            transitions: default(),
-            on_enter: default(),
-            on_exit: default(),
-        }
-    }
 }
+
+struct DummyMarkerTypeId;
 
 /// State machine component. Entities with this component will have bundles (the states)
 /// added and removed based on the transitions that you add. Build one
@@ -236,78 +228,58 @@ impl StateMachine {
         self
     }
 
-    fn run_events(&self, from: TypeId, to: TypeId, entity: Entity, commands: &mut Commands) {
-        for event in self.states[&from].on_exit.iter() {
-            event.trigger(entity, commands);
-        }
-        for event in self.states[&to].on_enter.iter() {
-            event.trigger(entity, commands);
-        }
-    }
-
     /// Updates the machine's state. Does *not* run the on_foo triggers.
-    fn update_state(&mut self, next_state: TypeId, entity: Entity) {
+    fn update_state(&mut self, next_state: TypeId, entity: Entity, commands: &mut Commands) {
         let from = &self.states[&self.current];
         let to = &self.states[&next_state];
+        for event in from.on_exit.iter() {
+            event.trigger(entity, commands);
+        }
+        for event in to.on_enter.iter() {
+            event.trigger(entity, commands);
+        }
         if self.log_transitions {
             info!("{entity:?} transitioned from {} to {}", from.name, to.name);
         }
         self.current = next_state;
-    }
-}
-
-/// Bookkeeping data used when applying the transition system.
-struct Transitions {
-    /// The entity we're currently on.
-    entity: Entity,
-    /// The state this transition leaves. We need this because we construct this
-    /// by `take`ing the edges out of the state machine.
-    old_state: TypeId,
-    new_state: Option<TypeId>,
-    metadata: StateMetadata,
-}
-
-impl Transitions {
-    /// Construct this by temporarily pulling out the transitions from the state
-    /// machine.
-    fn take(machine: &mut StateMachine, entity: Entity, state: TypeId) -> Self {
-        let metadata = machine.states.get_mut(&state).unwrap();
-        Transitions {
-            entity,
-            old_state: state,
-            new_state: None,
-            // just gonna borrow this real quick
-            metadata: std::mem::replace(metadata, StateMetadata::dummy()),
-        }
-    }
-
-    /// Update the machine's state if the state was transitioned to, then put
-    /// back the state.
-    fn put_back(mut self, machine: &mut StateMachine) {
-        let transitions = machine.states.get_mut(&self.old_state).unwrap();
-        std::mem::swap(transitions, &mut self.metadata);
-        if let Some(new_state) = self.new_state {
-            machine.update_state(new_state, self.entity);
-        }
     }
 
     /// Initialize all transitions. Must be executed before `run`. This is
     /// separate because `run` is parallelizable (takes a `&World`) but this
     /// isn't (takes a `&mut World`).
     fn initialize(&mut self, world: &mut World) {
-        for transition in self.metadata.transitions.iter_mut() {
+        for transition in self
+            .states
+            .get_mut(&self.current)
+            .unwrap()
+            .transitions
+            .iter_mut()
+        {
             transition.initialize(world);
         }
     }
 
     /// Runs all transitions until one is actually taken. If one was taken,
     /// stores the new state in this so we can update the machine in `put_back`.
-    fn run(&mut self, world: &World, commands: &mut Commands) {
-        self.new_state = self
-            .metadata
+    fn run(&mut self, world: &World, entity: Entity, commands: &mut Commands) {
+        let next_state = self
+            .states
+            .get_mut(&self.current)
+            .unwrap()
             .transitions
             .iter_mut()
-            .find_map(|transition| transition.run(world, &mut commands.entity(self.entity)));
+            .find_map(|transition| transition.run(world, &mut commands.entity(entity)));
+        if let Some(next_state) = next_state {
+            self.update_state(next_state, entity, commands);
+        }
+    }
+
+    fn dummy() -> Self {
+        Self {
+            current: TypeId::of::<DummyMarkerTypeId>(),
+            states: default(),
+            log_transitions: false,
+        }
     }
 }
 
@@ -315,45 +287,30 @@ impl Transitions {
 pub(crate) fn transition_system(world: &mut World, system_state: &mut SystemState<Commands>) {
     // pull the transitions out of the world
     let mut query = world.query::<(Entity, &mut StateMachine)>();
-    let mut to_invoke: Vec<Transitions> = query
+    let mut borrowed_machines: Vec<(Entity, StateMachine)> = query
         .iter_mut(world)
         .map(|(entity, mut machine)| {
-            let current = machine.current;
-            Transitions::take(machine.as_mut(), entity, current)
+            (
+                entity,
+                std::mem::replace(machine.as_mut(), StateMachine::dummy()),
+            )
         })
         .collect();
 
-    for transition in to_invoke.iter_mut() {
-        transition.initialize(world);
+    for (_, machine) in borrowed_machines.iter_mut() {
+        machine.initialize(world);
     }
 
-    {
-        // reborrow as immutable just to show that we can
-        let world: &World = world;
-
-        let mut commands = system_state.get(world);
-        // TODO: do this in parallel.
-        for transitions in to_invoke.iter_mut() {
-            transitions.run(world, &mut commands);
-        }
+    let mut commands = system_state.get(world);
+    for (entity, machine) in borrowed_machines.iter_mut() {
+        machine.run(world, *entity, &mut commands)
     }
 
-    for transitions in to_invoke {
-        let entity = transitions.entity;
-        let old_state = transitions.old_state;
-        let next_state = transitions.new_state;
-        {
-            let (_, mut machine) = query.get_mut(world, transitions.entity).unwrap();
-            transitions.put_back(machine.as_mut());
-        }
-        {
-            let mut commands = system_state.get(world);
-            let (_, machine) = query.get(world, entity).unwrap();
-            if let Some(next_state) = next_state {
-                machine.run_events(old_state, next_state, entity, &mut commands)
-            }
-        }
+    for (entity, machine) in borrowed_machines {
+        let mut dummy = query.get_mut(world, entity).unwrap().1;
+        *dummy = machine;
     }
+
     system_state.apply(world);
 }
 
