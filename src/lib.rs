@@ -26,12 +26,7 @@ impl Plugin for StateMachinePlugin {
 /// Function called by [`StateMachinePlugin`]. You may instead call it directly
 /// or use `seldom_fn_plugin`, which is another crate I maintain.
 pub fn state_machine_plugin(app: &mut App) {
-    app.configure_set(StateSet::Trigger.in_base_set(CoreSet::PostUpdate))
-        .configure_set(
-            StateSet::Transition
-                .in_base_set(CoreSet::PostUpdate)
-                .after(StateSet::Trigger),
-        )
+    app.configure_set(StateSet::Transition.in_base_set(CoreSet::PostUpdate))
         .add_system(transition_system.in_set(StateSet::Transition))
         .add_system(remove_done_markers.in_set(StateSet::Transition));
 }
@@ -54,8 +49,8 @@ pub mod prelude {
         state::{AnyState, MachineState},
         state_machine_plugin,
         trigger::{
-            trigger_plugin, AlwaysTrigger, BoolTrigger, Done, DoneTrigger, Never, NotTrigger,
-            OptionTrigger, Trigger, TriggerPlugin,
+            AlwaysTrigger, BoolTrigger, Done, DoneTrigger, Never, NotTrigger, OptionTrigger,
+            Trigger,
         },
         StateMachinePlugin,
     };

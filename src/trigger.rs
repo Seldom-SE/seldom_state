@@ -8,39 +8,11 @@ pub use input::{
     PressedTrigger, ReleasedTrigger, ValueTrigger,
 };
 
-use std::{convert::Infallible, fmt::Debug, marker::PhantomData};
+use std::{convert::Infallible, fmt::Debug};
 
 use bevy::ecs::system::{ReadOnlySystemParam, SystemParam};
 
 use crate::prelude::*;
-
-/// Plugin that must be added for a trigger to be checked. Also registers the [`NotTrigger<T>`]
-/// trigger.
-///
-/// # Panics
-///
-/// Panics with a system param conflict if the given trigger can access [`StateMachine`]
-/// as a parameter
-#[derive(Debug)]
-pub struct TriggerPlugin<T: Trigger>(PhantomData<T>);
-
-impl<T: Trigger> Plugin for TriggerPlugin<T> {
-    fn build(&self, _app: &mut App) {
-        warn!("seldom_state::TriggerPlugin is no longer necessary and can be removed.");
-    }
-}
-
-impl<T: Trigger> Default for TriggerPlugin<T> {
-    fn default() -> Self {
-        Self(default())
-    }
-}
-
-/// Function called by [`TriggerPlugin`]. You may instead call it directly
-/// or use `seldom_fn_plugin`, which is another crate I maintain.
-pub fn trigger_plugin<T: Trigger>(_app: &mut App) {
-    warn!("seldom_state::trigger_plugin is no longer necessary and can be removed.");
-}
 
 /// Wrapper for [`core::convert::Infallible`]. Use for [`Trigger::Err`] if the trigger
 /// is infallible.

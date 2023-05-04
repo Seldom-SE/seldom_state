@@ -119,14 +119,19 @@ type StateInserter = Box<dyn FnOnce(&mut World, Entity) + Send + Sync + 'static>
 /// with `StateMachine::new`, `StateMachine::trans`, and other methods.
 #[derive(Component)]
 pub struct StateMachine {
+    /// TypeId of the current state.
     current: TypeId,
     states: HashMap<TypeId, StateMetadata>,
-    // We store the transitions in a flat list so that we ensure we always
-    // check them in the right order; storing them in each StateMetadata would
-    // mean that e.g. we'd have to check every AnyState trigger before any
-    // state-specific trigger or vice versa.
+    /// Each transition and the state it should apply in (or [`AnyState`]). We
+    /// store the transitions in a flat list so that we ensure we always check
+    /// them in the right order; storing them in each StateMetadata would mean
+    /// that e.g. we'd have to check every AnyState trigger before any
+    /// state-specific trigger or vice versa.
     transitions: Vec<(TypeId, Box<dyn Transition>)>,
+    /// If true, all transitions are logged at info level.
     log_transitions: bool,
+    /// On the very first call to `run`, we invoke this to insert the initial
+    /// state, then replace this with `None`.
     initial_inserter: Option<StateInserter>,
 }
 
@@ -148,6 +153,7 @@ impl StateMachine {
         }
     }
 
+    /// Get the medatada for the given state, creating it if necessary.
     fn metadata_mut<S: MachineState>(&mut self) -> &mut StateMetadata {
         self.states
             .entry(TypeId::of::<S>())

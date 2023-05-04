@@ -9,7 +9,6 @@ fn main() {
     App::new()
         .add_plugins(DefaultPlugins)
         .add_plugin(StateMachinePlugin)
-        .add_plugin(TriggerPlugin::<Click>::default())
         .init_resource::<CursorPosition>()
         .add_startup_system(init)
         .add_system(update_cursor_position)
