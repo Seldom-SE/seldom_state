@@ -270,6 +270,24 @@ impl StateMachine {
         self.log_transitions = log_transitions;
         self
     }
+
+    /// Updates the machine's state. Runs on_enter/exit triggers, but does
+    /// *not* actually insert or remove components (including the old
+    /// state). `entity` must point to the entity this state machine is on.
+    fn update_state(&mut self, next_state: TypeId, entity: Entity, commands: &mut Commands) {
+        let from = &self.states[&self.current];
+        let to = &self.states[&next_state];
+        for event in from.on_exit.iter() {
+            event.trigger(entity, commands);
+        }
+        for event in to.on_enter.iter() {
+            event.trigger(entity, commands);
+        }
+        if self.log_transitions {
+            info!("{entity:?} transitioned from {} to {}", from.name, to.name);
+        }
+        self.current = next_state;
+    }
 }
 
 /// Bookkeeping data used when applying the transition system.
