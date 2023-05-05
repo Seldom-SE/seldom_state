@@ -25,9 +25,9 @@ use crate::prelude::*;
 ///
 /// If you are concerned with performance, consider having your states use sparse set storage,
 /// since they may be added to and removed from entities.
-pub trait MachineState: Component + Clone + Reflect {}
+pub trait MachineState: Bundle + Clone + Reflect {}
 
-impl<T: Component + Clone + Reflect> MachineState for T {}
+impl<T: Bundle + Clone + Reflect> MachineState for T {}
 
 /// State that represents any state. Transitions from [`AnyState`] may transition
 /// from any other state.

@@ -55,9 +55,9 @@ where
 impl<Trig, Prev, Build, Next> TransitionImpl<Trig, Prev, Build, Next>
 where
     Trig: Trigger,
-    Prev: Component,
+    Prev: Bundle,
     Build: Fn(Trig::Ok) -> Option<Next>,
-    Next: Component,
+    Next: Bundle,
 {
     pub fn new(trigger: Trig, builder: Build) -> Self {
         Self {
@@ -72,9 +72,9 @@ where
 impl<Trig, Prev, Build, Next> Transition for TransitionImpl<Trig, Prev, Build, Next>
 where
     Trig: Trigger,
-    Prev: Component,
+    Prev: Bundle,
     Build: Fn(Trig::Ok) -> Option<Next> + Send + Sync + 'static,
-    Next: Component,
+    Next: Bundle,
 {
     fn initialize(&mut self, world: &mut World) {
         self.system_state = Some(SystemState::new(world));
