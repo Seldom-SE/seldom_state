@@ -10,9 +10,6 @@ fn main() {
         .add_plugins(DefaultPlugins)
         .add_plugin(InputManagerPlugin::<Action>::default())
         .add_plugin(StateMachinePlugin)
-        // You must add `InputTriggerPlugin` for your action's triggers to work
-        .add_plugin(InputTriggerPlugin::<Action>::default())
-        .add_plugin(TriggerPlugin::<GroundedTrigger>::default())
         .add_startup_system(init)
         .add_system(walk)
         .add_system(fall)

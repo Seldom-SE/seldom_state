@@ -1,39 +1,10 @@
-use std::{any::type_name, marker::PhantomData};
+use std::any::type_name;
 
 use leafwing_input_manager::{
     action_state::ActionData, axislike::DualAxisData, orientation::Rotation,
 };
 
 use crate::prelude::*;
-
-/// Plugin that registers input-related trigger for the given [`Actionlike`]
-pub struct InputTriggerPlugin<A: Actionlike + Reflect>(PhantomData<A>);
-
-impl<A: Actionlike + Reflect> Plugin for InputTriggerPlugin<A> {
-    fn build(&self, app: &mut App) {
-        app.fn_plugin(input_trigger_plugin::<A>);
-    }
-}
-
-impl<A: Actionlike + Reflect> Default for InputTriggerPlugin<A> {
-    fn default() -> Self {
-        Self(default())
-    }
-}
-
-/// Function called by [`InputTriggerPlugin`]. You may instead call it directly
-/// or use `seldom_fn_plugin`, which is another crate I maintain.
-pub fn input_trigger_plugin<A: Actionlike + Reflect>(app: &mut App) {
-    app.fn_plugin(trigger_plugin::<ActionDataTrigger<A>>)
-        .fn_plugin(trigger_plugin::<AxisPairTrigger<A>>)
-        .fn_plugin(trigger_plugin::<ClampedAxisPairTrigger<A>>)
-        .fn_plugin(trigger_plugin::<ClampedValueTrigger<A>>)
-        .fn_plugin(trigger_plugin::<JustPressedTrigger<A>>)
-        .fn_plugin(trigger_plugin::<JustReleasedTrigger<A>>)
-        .fn_plugin(trigger_plugin::<PressedTrigger<A>>)
-        .fn_plugin(trigger_plugin::<ReleasedTrigger<A>>)
-        .fn_plugin(trigger_plugin::<ValueTrigger<A>>);
-}
 
 /// Trigger that transitions if the given [`Actionlike`]'s value is within the given bounds.
 /// You must add an [`InputTriggerPlugin<Actionlike>`] with your [`Actionlike`] type.

@@ -3,9 +3,8 @@ mod input;
 
 #[cfg(feature = "leafwing_input")]
 pub use input::{
-    input_trigger_plugin, ActionDataTrigger, AxisPairTrigger, ClampedAxisPairTrigger,
-    ClampedValueTrigger, InputTriggerPlugin, JustPressedTrigger, JustReleasedTrigger,
-    PressedTrigger, ReleasedTrigger, ValueTrigger,
+    ActionDataTrigger, AxisPairTrigger, ClampedAxisPairTrigger, ClampedValueTrigger,
+    JustPressedTrigger, JustReleasedTrigger, PressedTrigger, ReleasedTrigger, ValueTrigger,
 };
 
 use std::{convert::Infallible, fmt::Debug};

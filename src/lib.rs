@@ -40,9 +40,8 @@ pub mod prelude {
 
     #[cfg(feature = "leafwing_input")]
     pub use crate::trigger::{
-        input_trigger_plugin, ActionDataTrigger, AxisPairTrigger, ClampedAxisPairTrigger,
-        ClampedValueTrigger, InputTriggerPlugin, JustPressedTrigger, JustReleasedTrigger,
-        PressedTrigger, ReleasedTrigger, ValueTrigger,
+        ActionDataTrigger, AxisPairTrigger, ClampedAxisPairTrigger, ClampedValueTrigger,
+        JustPressedTrigger, JustReleasedTrigger, PressedTrigger, ReleasedTrigger, ValueTrigger,
     };
     pub use crate::{
         machine::StateMachine,
