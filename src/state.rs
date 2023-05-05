@@ -109,6 +109,9 @@ mod tests {
 
         let entity = app.world.spawn(machine).id();
         app.update();
+        assert!(app.world.get::<StateOne>(entity).is_some());
+
+        app.update();
         assert!(app.world.get::<StateTwo>(entity).is_some());
         assert!(
             app.world.contains_resource::<SomeResource>(),

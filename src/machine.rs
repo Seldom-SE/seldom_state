@@ -112,8 +112,11 @@ impl StateMetadata {
     }
 }
 
-/// Used to insert the initial state on the first pass through the system.
-type StateInserter = Box<dyn FnOnce(&mut World, Entity) + Send + Sync + 'static>;
+/// The state of a StateMachine before it's actually run. We have an explicit
+/// state for this so that we can make sure that on_enter triggers and so on
+/// run properly.
+#[derive(Clone, Component, Reflect)]
+struct InitialState;
 
 /// State machine component. Entities with this component will have bundles (the states)
 /// added and removed based on the transitions that you add. Build one
@@ -131,27 +134,19 @@ pub struct StateMachine {
     transitions: Vec<(TypeId, Box<dyn Transition>)>,
     /// If true, all transitions are logged at info level.
     log_transitions: bool,
-    /// On the very first call to `run`, we invoke this to insert the initial
-    /// state, then replace this with `None`.
-    initial_inserter: Option<StateInserter>,
 }
 
 impl StateMachine {
     /// Creates a state machine with an initial state and no transitions. Add more
     /// with [`StateMachine::trans`].
     pub fn new<S: MachineState>(initial: S) -> Self {
-        Self {
-            current: initial.type_id(),
-            states: HashMap::from([
-                (initial.type_id(), StateMetadata::new::<S>()),
-                (TypeId::of::<AnyState>(), StateMetadata::new::<AnyState>()),
-            ]),
+        let machine = Self {
+            current: TypeId::of::<InitialState>(),
+            states: HashMap::from([(TypeId::of::<AnyState>(), StateMetadata::new::<AnyState>())]),
             transitions: vec![],
             log_transitions: false,
-            initial_inserter: Some(Box::new(|world, entity| {
-                world.get_entity_mut(entity).unwrap().insert(initial);
-            })),
-        }
+        };
+        machine.trans::<InitialState>(AlwaysTrigger, initial)
     }
 
     /// Get the medatada for the given state, creating it if necessary.
@@ -291,7 +286,6 @@ impl StateMachine {
             states: default(),
             log_transitions: false,
             transitions: default(),
-            initial_inserter: None,
         }
     }
 }
@@ -316,11 +310,8 @@ pub(crate) fn transition_system(
         .collect();
 
     // world is mutable here, since initialization require mutating the world
-    for (entity, machine) in borrowed_machines.iter_mut() {
+    for (_, machine) in borrowed_machines.iter_mut() {
         machine.initialize(world);
-        if let Some(inserter) = machine.initial_inserter.take() {
-            inserter(world, *entity);
-        }
     }
 
     // world is not mutated here; the state machines are not in the world, and
@@ -394,6 +385,9 @@ mod tests {
             .trans::<StateOne>(AlwaysTrigger, StateTwo)
             .trans::<StateTwo>(ResourcePresent, StateThree);
         let entity = app.world.spawn(machine).id();
+
+        app.update();
+        assert!(app.world.get::<StateOne>(entity).is_some());
 
         app.update();
         // should have moved to state two
