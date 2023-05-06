@@ -1,4 +1,7 @@
-use std::fmt::{self, Debug, Formatter};
+use std::{
+    any::TypeId,
+    fmt::{self, Debug, Formatter},
+};
 
 use bevy::ecs::system::{Command, EntityCommands};
 
@@ -33,6 +36,17 @@ impl<T: Bundle + Clone + Reflect> MachineState for T {}
 /// from any other state.
 #[derive(Clone, Component, Debug, Reflect)]
 pub enum AnyState {}
+
+pub(crate) trait Insert: Send {
+    fn insert(self: Box<Self>, entity: &mut EntityCommands) -> TypeId;
+}
+
+impl<S: MachineState> Insert for S {
+    fn insert(self: Box<Self>, entity: &mut EntityCommands) -> TypeId {
+        entity.insert(*self);
+        TypeId::of::<AnyState>()
+    }
+}
 
 #[derive(Debug)]
 pub(crate) enum OnEvent {

@@ -10,7 +10,11 @@ use bevy::{
     utils::HashMap,
 };
 
-use crate::{prelude::*, set::StateSet, state::OnEvent};
+use crate::{
+    prelude::*,
+    set::StateSet,
+    state::{Insert, OnEvent},
+};
 
 pub(crate) fn machine_plugin(app: &mut App) {
     app.configure_set(StateSet::Transition.in_base_set(CoreSet::PostUpdate))
@@ -22,9 +26,8 @@ trait Transition: Debug + Send + Sync + 'static {
     /// Called before any call to `run`.
     fn init(&mut self, world: &mut World);
     /// Checks whether the transition should be taken. `entity` is the entity
-    /// that contains the state machine. To take the transition,
-    /// use [`EntityCommands::insert`] and return the [`TypeId`] of the state you inserted.
-    fn run(&mut self, world: &World, entity: &mut EntityCommands) -> Option<TypeId>;
+    /// that contains the state machine.
+    fn run(&mut self, world: &World, entity: Entity) -> Option<(Box<dyn Insert>, TypeId)>;
 }
 
 /// An edge in the state machine. The type parameters are
@@ -70,19 +73,15 @@ where
     Next: MachineState,
 {
     fn init(&mut self, world: &mut World) {
-        self.system_state = Some(SystemState::new(world));
+        if self.system_state.is_none() {
+            self.system_state = Some(SystemState::new(world));
+        }
     }
 
-    fn run(&mut self, world: &World, entity: &mut EntityCommands) -> Option<TypeId> {
+    fn run(&mut self, world: &World, entity: Entity) -> Option<(Box<dyn Insert>, TypeId)> {
         let state = self.system_state.as_mut().unwrap();
-        if let Ok(res) = self.trigger.trigger(entity.id(), &state.get(world)) {
-            if let Some(next) = (self.builder)(res) {
-                entity.remove::<Prev>();
-                entity.insert(next);
-                return Some(TypeId::of::<Next>());
-            }
-        }
-        None
+        let Ok(res) = self.trigger.trigger(entity, &state.get(world)) else { return None };
+        (self.builder)(res).map(|state| (Box::new(state) as Box<dyn Insert>, TypeId::of::<Next>()))
     }
 }
 
@@ -117,7 +116,9 @@ impl StateMetadata {
         Self {
             name: type_name::<S>().to_owned(),
             on_enter: default(),
-            on_exit: default(),
+            on_exit: vec![OnEvent::Entity(Box::new(|entity: &mut EntityCommands| {
+                entity.remove::<S>();
+            }))],
         }
     }
 }
@@ -269,23 +270,34 @@ impl StateMachine {
     /// Runs all transitions until one is actually taken. If one is taken, logs
     /// the transition and runs `on_enter/on_exit` triggers.
     fn run(&mut self, world: &World, entity: Entity, commands: &mut Commands) {
-        let next_state = self
-            .transitions_mut()
-            .find_map(|transition| transition.run(world, &mut commands.entity(entity)));
-        if let Some(next_state) = next_state {
-            let from = &self.states[&self.current];
-            let to = &self.states[&next_state];
-            for event in from.on_exit.iter() {
-                event.trigger(entity, commands);
-            }
-            for event in to.on_enter.iter() {
-                event.trigger(entity, commands);
-            }
-            if self.log_transitions {
-                info!("{entity:?} transitioned from {} to {}", from.name, to.name);
-            }
-            self.current = next_state;
+        let Some((insert, next_state)) = self
+            .transitions
+            .par_splat_map_mut(ComputeTaskPool::get(), None, |transitions| {
+                transitions
+                    .iter_mut()
+                    .filter(|(type_id, _)| {
+                        *type_id == self.current || *type_id == TypeId::of::<AnyState>()
+                    })
+                    .find_map(|(_, transition)| transition.run(world, entity))
+            })
+            .into_iter()
+            .find_map(|x| x) else { return };
+
+        let from = &self.states[&self.current];
+        let to = &self.states[&next_state];
+        for event in from.on_exit.iter() {
+            event.trigger(entity, commands);
         }
+
+        insert.insert(&mut commands.entity(entity));
+        for event in to.on_enter.iter() {
+            event.trigger(entity, commands);
+        }
+
+        if self.log_transitions {
+            info!("{entity:?} transitioned from {} to {}", from.name, to.name);
+        }
+        self.current = next_state;
     }
 
     /// When running the transition system, we replace all StateMachines in the
@@ -307,8 +319,8 @@ pub(crate) fn transition(
     machine_query: &mut QueryState<(Entity, &mut StateMachine)>,
 ) {
     // Pull the machines out of the world so we can invoke mutable methods on
-    // them. The alternative would be to wrap the entire StateMachine in an
-    // Arc<Mutex<>>, but that would complicate the API surface and you wouldn't
+    // them. The alternative would be to wrap the entire `StateMachine` in an
+    // `Arc<Mutex>`, but that would complicate the API surface and you wouldn't
     // be able to do anything more anyway (since you'd need to lock the mutex
     // anyway).
     let mut borrowed_machines: Vec<(Entity, StateMachine)> = machine_query
@@ -319,12 +331,12 @@ pub(crate) fn transition(
         })
         .collect();
 
-    // world is mutable here, since initialization require mutating the world
+    // `world` is mutable here, since initialization requires mutating the world
     for (_, machine) in borrowed_machines.iter_mut() {
         machine.init_transitions(world);
     }
 
-    // world is not mutated here; the state machines are not in the world, and
+    // `world` is not mutated here; the state machines are not in the world, and
     // the Commands don't mutate until application.
     let par_commands = system_state.get(world);
     let task_pool = ComputeTaskPool::get();
