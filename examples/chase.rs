@@ -9,9 +9,6 @@ fn main() {
         .add_plugins(DefaultPlugins)
         // This plugin is required for `seldom_state`
         .add_plugin(StateMachinePlugin)
-        // This plugin needs to be added for each custom trigger
-        // Since we only made one trigger, we only need to add one plugin
-        .add_plugin(TriggerPlugin::<Near>::default())
         .add_startup_system(init)
         .add_system(follow)
         .add_system(move_player)

@@ -3,57 +3,23 @@ mod input;
 
 #[cfg(feature = "leafwing_input")]
 pub use input::{
-    input_trigger_plugin, ActionDataTrigger, AxisPairTrigger, ClampedAxisPairTrigger,
-    ClampedValueTrigger, InputTriggerPlugin, JustPressedTrigger, JustReleasedTrigger,
-    PressedTrigger, ReleasedTrigger, ValueTrigger,
+    ActionDataTrigger, AxisPairTrigger, ClampedAxisPairTrigger, ClampedValueTrigger,
+    JustPressedTrigger, JustReleasedTrigger, PressedTrigger, ReleasedTrigger, ValueTrigger,
 };
 
-use std::{
-    any::TypeId,
-    convert::Infallible,
-    fmt::{self, Debug, Formatter},
-    marker::PhantomData,
-};
+use std::{convert::Infallible, fmt::Debug};
 
-use bevy::ecs::system::{StaticSystemParam, SystemParam};
+use bevy::ecs::system::{ReadOnlySystemParam, SystemParam};
 
 use crate::{prelude::*, set::StateSet};
 
-/// Plugin that must be added for a trigger to be checked. Also registers the [`NotTrigger<T>`]
-/// trigger.
-///
-/// # Panics
-///
-/// Panics with a system param conflict if the given trigger can access [`StateMachine`]
-/// as a parameter
-#[derive(Debug)]
-pub struct TriggerPlugin<T: Trigger>(PhantomData<T>);
-
-impl<T: Trigger> Plugin for TriggerPlugin<T> {
-    fn build(&self, app: &mut App) {
-        app.fn_plugin(trigger_plugin::<T>);
-    }
-}
-
-impl<T: Trigger> Default for TriggerPlugin<T> {
-    fn default() -> Self {
-        Self(default())
-    }
-}
-
-/// Function called by [`TriggerPlugin`]. You may instead call it directly
-/// or use `seldom_fn_plugin`, which is another crate I maintain.
-pub fn trigger_plugin<T: Trigger>(app: &mut App) {
-    app.add_systems((check_trigger::<T>, check_trigger::<NotTrigger<T>>).in_set(StateSet::Trigger))
-        .add_startup_systems((register_trigger::<T>, register_trigger::<NotTrigger<T>>));
-}
-
-pub(crate) fn trigger_plugin_internal(app: &mut App) {
-    app.fn_plugin(trigger_plugin::<AlwaysTrigger>)
-        .fn_plugin(trigger_plugin::<DoneTrigger>)
-        .init_resource::<RegisteredTriggers>()
-        .add_startup_system(validate_triggers)
-        .add_system(remove_done_markers.in_set(StateSet::Transition));
+pub(crate) fn trigger_plugin(app: &mut App) {
+    app.configure_set(
+        StateSet::RemoveDoneMarkers
+            .in_base_set(CoreSet::PostUpdate)
+            .after(StateSet::Transition),
+    )
+    .add_system(remove_done_markers.in_set(StateSet::RemoveDoneMarkers));
 }
 
 /// Wrapper for [`core::convert::Infallible`]. Use for [`Trigger::Err`] if the trigger
@@ -69,7 +35,7 @@ pub struct Never {
 /// for implementing this trait, since it can be tricky.
 pub trait Trigger: 'static + Reflect + Send + Sync {
     /// System parameter provided to [`Trigger::trigger`]. Must not access [`StateMachine`].
-    type Param<'w, 's>: SystemParam;
+    type Param<'w, 's>: ReadOnlySystemParam;
     /// When the trigger occurs, this data is returned from `trigger`, and passed
     /// to every transition builder on this trigger. If there's no relevant information to pass,
     /// just use `()`. If there's also no relevant information to pass to [`Trigger::Err`],
@@ -100,7 +66,7 @@ pub trait Trigger: 'static + Reflect + Send + Sync {
 /// information to pass for [`Trigger::Err`].
 pub trait OptionTrigger: 'static + Reflect + Send + Sync {
     /// System parameter provided to [`OptionTrigger::trigger`]. Must not access [`StateMachine`].
-    type Param<'w, 's>: SystemParam;
+    type Param<'w, 's>: ReadOnlySystemParam;
     /// When the trigger occurs, this data is returned from `trigger`, and passed
     /// to every transition builder on this trigger. If there's no relevant information to pass,
     /// implement [`BoolTrigger`] instead.
@@ -134,7 +100,7 @@ impl<T: OptionTrigger> Trigger for T {
 /// information to pass for [`Trigger::Ok`] and [`Trigger::Err`].
 pub trait BoolTrigger: 'static + Reflect + Send + Sync {
     /// System parameter provided to [`BoolTrigger::trigger`]. Must not access [`StateMachine`].
-    type Param<'w, 's>: SystemParam;
+    type Param<'w, 's>: ReadOnlySystemParam;
 
     /// Called for every entity that may transition to a state on this trigger. Return `true`
     /// if it should transition, and `false` if it should not. In most cases, you may use
@@ -173,8 +139,7 @@ impl Trigger for AlwaysTrigger {
     }
 }
 
-/// Trigger that negates the contained trigger. It works for any trigger that is added
-/// by [`TriggerPlugin`].
+/// Trigger that negates the contained trigger.
 #[derive(Debug, Deref, DerefMut, Reflect)]
 pub struct NotTrigger<T: Trigger>(pub T);
 
@@ -237,64 +202,7 @@ impl DoneTrigger {
     }
 }
 
-pub(crate) trait DynTrigger: Reflect {}
-
-impl Debug for dyn DynTrigger {
-    fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
-        self.as_reflect().fmt(f)
-    }
-}
-
-impl<T: Trigger> DynTrigger for T {}
-
-#[derive(Default, Deref, DerefMut, Resource)]
-pub(crate) struct RegisteredTriggers(Vec<TypeId>);
-
-fn register_trigger<T: Trigger>(mut registered: ResMut<RegisteredTriggers>) {
-    registered.push(TypeId::of::<T>())
-}
-
-fn validate_triggers(
-    machines: Query<&StateMachine, Added<StateMachine>>,
-    registered: Res<RegisteredTriggers>,
-) {
-    for machine in &machines {
-        machine.validate_triggers(&registered)
-    }
-}
-
-fn check_trigger<T: Trigger>(
-    mut machines: Query<(Entity, &mut StateMachine)>,
-    param: StaticSystemParam<T::Param<'_, '_>>,
-) {
-    for (entity, mut machine) in &mut machines {
-        let mut marks = Vec::default();
-
-        for (i, trigger) in machine.get_triggers::<T>(false).into_iter().enumerate() {
-            if let Ok(result) = trigger.trigger(entity, &param) {
-                marks.push((i, result));
-            }
-        }
-
-        for (i, result) in marks {
-            machine.mark_trigger::<T>(i, result, false);
-        }
-
-        marks = Vec::default();
-
-        for (i, trigger) in machine.get_triggers::<T>(true).into_iter().enumerate() {
-            if let Ok(result) = trigger.trigger(entity, &param) {
-                marks.push((i, result));
-            }
-        }
-
-        for (i, result) in marks {
-            machine.mark_trigger::<T>(i, result, true);
-        }
-    }
-}
-
-fn remove_done_markers(mut commands: Commands, dones: Query<Entity, With<Done>>) {
+pub(crate) fn remove_done_markers(mut commands: Commands, dones: Query<Entity, With<Done>>) {
     for done in &dones {
         commands.entity(done).remove::<Done>();
     }

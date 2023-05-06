@@ -9,7 +9,6 @@ fn main() {
     App::new()
         .add_plugins(DefaultPlugins)
         .add_plugin(StateMachinePlugin)
-        .add_plugin(TriggerPlugin::<Click>::default())
         .init_resource::<CursorPosition>()
         .add_startup_system(init)
         .add_system(update_cursor_position)
@@ -31,7 +30,7 @@ fn init(mut commands: Commands, asset_server: Res<AssetServer>) {
             .trans_builder::<AnyState, _, _>(Click, |pos| {
                 Some(GoToSelection {
                     speed: 200.,
-                    target: *pos,
+                    target: pos,
                 })
             })
             // `DoneTrigger` triggers when the `Done` component is added to the entity

@@ -10,9 +10,6 @@ fn main() {
         .add_plugins(DefaultPlugins)
         .add_plugin(InputManagerPlugin::<Action>::default())
         .add_plugin(StateMachinePlugin)
-        // You must add `InputTriggerPlugin` for your action's triggers to work
-        .add_plugin(InputTriggerPlugin::<Action>::default())
-        .add_plugin(TriggerPlugin::<GroundedTrigger>::default())
         .add_startup_system(init)
         .add_system(walk)
         .add_system(fall)
@@ -57,7 +54,7 @@ fn init(mut commands: Commands, asset_server: Res<AssetServer>) {
             // When the player hits the ground, idle
             .trans::<Falling>(GroundedTrigger, Grounded::Idle)
             // When the player is grounded, set their movement direction
-            .trans_builder::<Grounded, _, _>(ValueTrigger::unbounded(Action::Move), |&value| {
+            .trans_builder::<Grounded, _, _>(ValueTrigger::unbounded(Action::Move), |value| {
                 Some(match value {
                     value if value > 0.5 => Grounded::Right,
                     value if value < -0.5 => Grounded::Left,
