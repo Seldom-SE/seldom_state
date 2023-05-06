@@ -126,7 +126,7 @@ impl StateMetadata {
 /// The state of a [`StateMachine`] before it's actually run. We have an explicit
 /// state for this so that we can make sure that on_enter triggers and so on
 /// run properly.
-#[derive(Clone, Component, Reflect)]
+#[derive(Clone, Component)]
 struct InitialState;
 
 /// State machine component. Entities with this component will have bundles (the states)
@@ -361,18 +361,17 @@ mod tests {
     use super::*;
 
     // Test states to transition between.
-    #[derive(Component, Clone, Reflect)]
+    #[derive(Component, Clone)]
     struct StateOne;
-    #[derive(Component, Clone, Reflect)]
+    #[derive(Component, Clone)]
     struct StateTwo;
-    #[derive(Component, Clone, Reflect)]
+    #[derive(Component, Clone)]
     struct StateThree;
 
     #[derive(Resource)]
     struct SomeResource;
 
     /// Triggers when `SomeResource` is present.
-    #[derive(Reflect)]
     struct ResourcePresent;
 
     impl BoolTrigger for ResourcePresent {

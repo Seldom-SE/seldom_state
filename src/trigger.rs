@@ -7,7 +7,7 @@ pub use input::{
     JustPressedTrigger, JustReleasedTrigger, PressedTrigger, ReleasedTrigger, ValueTrigger,
 };
 
-use std::{convert::Infallible, fmt::Debug};
+use std::{any::type_name, convert::Infallible, fmt::Debug};
 
 use bevy::ecs::system::{ReadOnlySystemParam, SystemParam};
 
@@ -24,28 +24,27 @@ pub(crate) fn trigger_plugin(app: &mut App) {
 
 /// Wrapper for [`core::convert::Infallible`]. Use for [`Trigger::Err`] if the trigger
 /// is infallible.
-#[derive(Debug, Deref, DerefMut, Reflect)]
+#[derive(Debug, Deref, DerefMut)]
 pub struct Never {
-    #[reflect(ignore)]
     never: Infallible,
 }
 
 /// Types that implement this may be used in [`StateMachine`]s to transition from one state
 /// to another. [`TriggerPlugin`] must be added for each trigger. Look at an example
 /// for implementing this trait, since it can be tricky.
-pub trait Trigger: 'static + Reflect + Send + Sync {
+pub trait Trigger: 'static + Send + Sync {
     /// System parameter provided to [`Trigger::trigger`]. Must not access [`StateMachine`].
     type Param<'w, 's>: ReadOnlySystemParam;
     /// When the trigger occurs, this data is returned from `trigger`, and passed
     /// to every transition builder on this trigger. If there's no relevant information to pass,
     /// just use `()`. If there's also no relevant information to pass to [`Trigger::Err`],
     /// implement [`BoolTrigger`] instead.
-    type Ok: Reflect;
+    type Ok;
     /// When the trigger does not occur, this data is returned from `trigger`. In this case,
     /// [`NotTrigger<Self>`] passes it to every transition builder on this trigger.
     /// If there's no relevant information to pass, implement [`OptionTrigger`] instead.
     /// If this trigger is infallible, use [`Never`].
-    type Err: Reflect;
+    type Err;
 
     /// Called for every entity that may transition to a state on this trigger. Return `Ok`
     /// if it should transition, and `Err` if it should not. In most cases, you may use
@@ -58,19 +57,19 @@ pub trait Trigger: 'static + Reflect + Send + Sync {
 
     /// Get the name of the type, for use in logging. You probably should not override this.
     fn base_type_name(&self) -> &str {
-        self.type_name()
+        type_name::<Self>()
     }
 }
 
 /// Automatically implements [`Trigger`]. Implement this instead of there is no relevant
 /// information to pass for [`Trigger::Err`].
-pub trait OptionTrigger: 'static + Reflect + Send + Sync {
+pub trait OptionTrigger: 'static + Send + Sync {
     /// System parameter provided to [`OptionTrigger::trigger`]. Must not access [`StateMachine`].
     type Param<'w, 's>: ReadOnlySystemParam;
     /// When the trigger occurs, this data is returned from `trigger`, and passed
     /// to every transition builder on this trigger. If there's no relevant information to pass,
     /// implement [`BoolTrigger`] instead.
-    type Some: Reflect;
+    type Some;
 
     /// Called for every entity that may transition to a state on this trigger. Return `Some`
     /// if it should transition, and `None` if it should not. In most cases, you may use
@@ -98,7 +97,7 @@ impl<T: OptionTrigger> Trigger for T {
 
 /// Automatically implements [`Trigger`]. Implement this instead of there is no relevant
 /// information to pass for [`Trigger::Ok`] and [`Trigger::Err`].
-pub trait BoolTrigger: 'static + Reflect + Send + Sync {
+pub trait BoolTrigger: 'static + Send + Sync {
     /// System parameter provided to [`BoolTrigger::trigger`]. Must not access [`StateMachine`].
     type Param<'w, 's>: ReadOnlySystemParam;
 
@@ -126,7 +125,7 @@ impl<T: BoolTrigger> OptionTrigger for T {
 }
 
 /// Trigger that always transitions
-#[derive(Debug, Reflect)]
+#[derive(Debug)]
 pub struct AlwaysTrigger;
 
 impl Trigger for AlwaysTrigger {
@@ -140,7 +139,7 @@ impl Trigger for AlwaysTrigger {
 }
 
 /// Trigger that negates the contained trigger.
-#[derive(Debug, Deref, DerefMut, Reflect)]
+#[derive(Debug, Deref, DerefMut)]
 pub struct NotTrigger<T: Trigger>(pub T);
 
 impl<T: Trigger> Trigger for NotTrigger<T> {
@@ -163,7 +162,7 @@ impl<T: Trigger> Trigger for NotTrigger<T> {
 
 /// Marker component that represents that the current state has completed. Removed
 /// from every entity each frame after checking triggers. To be used with [`DoneTrigger`].
-#[derive(Component, Debug, Eq, PartialEq, Reflect)]
+#[derive(Component, Debug, Eq, PartialEq)]
 #[component(storage = "SparseSet")]
 pub enum Done {
     /// Success variant
@@ -174,7 +173,7 @@ pub enum Done {
 
 /// Trigger that transitions if the entity has the [`Done`] component
 /// with the associated variant.
-#[derive(Debug, Reflect)]
+#[derive(Debug)]
 pub enum DoneTrigger {
     /// Success variant
     Success,

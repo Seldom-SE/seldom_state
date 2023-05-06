@@ -7,34 +7,17 @@ use bevy::ecs::system::{Command, EntityCommands};
 
 use crate::prelude::*;
 
-/// A state that an entity may be in. A state must implement [`Reflect`], but a workaround exists
-/// for structs that contain types that do not implement [`Reflect`].
-///
-/// ```rust
-/// # use bevy::prelude::*;
-/// #
-/// #[derive(Clone)]
-/// struct NonReflectType;
-///
-/// #[derive(Clone, Component, Reflect)]
-/// #[component(storage = "SparseSet")]
-/// struct MyState {
-///     #[reflect(ignore)]
-///     non_reflect_type: NonReflectType
-/// }
-/// ```
-///
-/// This workaround currently does not affect the functionality of your state machine.
+/// A state that an entity may be in.
 ///
 /// If you are concerned with performance, consider having your states use sparse set storage,
 /// since they may be added to and removed from entities.
-pub trait MachineState: Bundle + Clone + Reflect {}
+pub trait MachineState: Bundle + Clone {}
 
-impl<T: Bundle + Clone + Reflect> MachineState for T {}
+impl<T: Bundle + Clone> MachineState for T {}
 
 /// State that represents any state. Transitions from [`AnyState`] may transition
 /// from any other state.
-#[derive(Clone, Component, Debug, Reflect)]
+#[derive(Clone, Component, Debug)]
 pub enum AnyState {}
 
 pub(crate) trait Insert: Send {
@@ -101,9 +84,9 @@ mod tests {
 
     use super::*;
 
-    #[derive(Component, Clone, Reflect)]
+    #[derive(Component, Clone)]
     struct StateOne;
-    #[derive(Component, Clone, Reflect)]
+    #[derive(Component, Clone)]
     struct StateTwo;
 
     #[derive(Resource, Clone)]

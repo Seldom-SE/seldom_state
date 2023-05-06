@@ -8,8 +8,8 @@ use crate::prelude::*;
 
 /// Trigger that transitions if the given [`Actionlike`]'s value is within the given bounds.
 /// You must add an [`InputTriggerPlugin<Actionlike>`] with your [`Actionlike`] type.
-#[derive(Debug, Reflect)]
-pub struct ValueTrigger<A: Actionlike + Reflect> {
+#[derive(Debug)]
+pub struct ValueTrigger<A: Actionlike> {
     /// The action
     pub action: A,
     /// The minimum value. If no minimum is necessary, use [`f32::NEG_INFINITY`], or similar
@@ -18,7 +18,7 @@ pub struct ValueTrigger<A: Actionlike + Reflect> {
     pub max: f32,
 }
 
-impl<A: Actionlike + Reflect> Trigger for ValueTrigger<A> {
+impl<A: Actionlike> Trigger for ValueTrigger<A> {
     type Param<'w, 's> = Query<'w, 's, &'static ActionState<A>>;
     type Ok = f32;
     type Err = f32;
@@ -40,7 +40,7 @@ impl<A: Actionlike + Reflect> Trigger for ValueTrigger<A> {
     }
 }
 
-impl<A: Actionlike + Reflect> ValueTrigger<A> {
+impl<A: Actionlike> ValueTrigger<A> {
     /// Unbounded trigger
     pub fn unbounded(action: A) -> Self {
         Self {
@@ -71,8 +71,8 @@ impl<A: Actionlike + Reflect> ValueTrigger<A> {
 
 /// Trigger that transitions if the given [`Actionlike`]'s value is within the given bounds.
 /// You must add an [`InputTriggerPlugin<Actionlike>`] with your [`Actionlike`] type.
-#[derive(Debug, Reflect)]
-pub struct ClampedValueTrigger<A: Actionlike + Reflect> {
+#[derive(Debug)]
+pub struct ClampedValueTrigger<A: Actionlike> {
     /// The action
     pub action: A,
     /// The minimum value. If no minimum is necessary, use `f32::NEG_INFINITY`, or similar.
@@ -81,7 +81,7 @@ pub struct ClampedValueTrigger<A: Actionlike + Reflect> {
     pub max: f32,
 }
 
-impl<A: Actionlike + Reflect> Trigger for ClampedValueTrigger<A> {
+impl<A: Actionlike> Trigger for ClampedValueTrigger<A> {
     type Param<'w, 's> = Query<'w, 's, &'static ActionState<A>>;
     type Ok = f32;
     type Err = f32;
@@ -103,7 +103,7 @@ impl<A: Actionlike + Reflect> Trigger for ClampedValueTrigger<A> {
     }
 }
 
-impl<A: Actionlike + Reflect> ClampedValueTrigger<A> {
+impl<A: Actionlike> ClampedValueTrigger<A> {
     /// Unbounded trigger
     pub fn unbounded(action: A) -> Self {
         Self {
@@ -134,8 +134,8 @@ impl<A: Actionlike + Reflect> ClampedValueTrigger<A> {
 
 /// Trigger that transitions if the given [`Actionlike`]'s [`DualAxisData`] is within the given
 /// bounds. You must add an [`InputTriggerPlugin<Actionlike>`] with your [`Actionlike`] type.
-#[derive(Debug, Reflect)]
-pub struct AxisPairTrigger<A: Actionlike + Reflect> {
+#[derive(Debug)]
+pub struct AxisPairTrigger<A: Actionlike> {
     /// The action
     pub action: A,
     /// Minimum axis pair length. If no minimum is necessary, use `0.`. To exclude specifically
@@ -153,7 +153,7 @@ pub struct AxisPairTrigger<A: Actionlike + Reflect> {
     pub max_rotation: Rotation,
 }
 
-impl<A: Actionlike + Reflect> Trigger for AxisPairTrigger<A> {
+impl<A: Actionlike> Trigger for AxisPairTrigger<A> {
     type Param<'w, 's> = Query<'w, 's, &'static ActionState<A>>;
     type Ok = DualAxisData;
     type Err = Option<DualAxisData>;
@@ -192,7 +192,7 @@ impl<A: Actionlike + Reflect> Trigger for AxisPairTrigger<A> {
     }
 }
 
-impl<A: Actionlike + Reflect> AxisPairTrigger<A> {
+impl<A: Actionlike> AxisPairTrigger<A> {
     /// Unbounded trigger
     pub fn unbounded(action: A) -> Self {
         Self {
@@ -251,8 +251,8 @@ impl<A: Actionlike + Reflect> AxisPairTrigger<A> {
 
 /// Trigger that transitions if the given [`Actionlike`]'s [`DualAxisData`] is within the given
 /// bounds. You must add an [`InputTriggerPlugin<Actionlike>`] with your [`Actionlike`] type.
-#[derive(Debug, Reflect)]
-pub struct ClampedAxisPairTrigger<A: Actionlike + Reflect> {
+#[derive(Debug)]
+pub struct ClampedAxisPairTrigger<A: Actionlike> {
     /// The action
     pub action: A,
     /// Minimum axis pair length. If no minimum is necessary, use `0.`. To exclude specifically
@@ -270,7 +270,7 @@ pub struct ClampedAxisPairTrigger<A: Actionlike + Reflect> {
     pub max_rotation: Rotation,
 }
 
-impl<A: Actionlike + Reflect> Trigger for ClampedAxisPairTrigger<A> {
+impl<A: Actionlike> Trigger for ClampedAxisPairTrigger<A> {
     type Param<'w, 's> = Query<'w, 's, &'static ActionState<A>>;
     type Ok = DualAxisData;
     type Err = Option<DualAxisData>;
@@ -309,7 +309,7 @@ impl<A: Actionlike + Reflect> Trigger for ClampedAxisPairTrigger<A> {
     }
 }
 
-impl<A: Actionlike + Reflect> ClampedAxisPairTrigger<A> {
+impl<A: Actionlike> ClampedAxisPairTrigger<A> {
     /// Unbounded trigger
     pub fn unbounded(action: A) -> Self {
         Self {
@@ -368,10 +368,10 @@ impl<A: Actionlike + Reflect> ClampedAxisPairTrigger<A> {
 
 /// Trigger that transitions upon pressing the given [`Actionlike`]. You must add
 /// an [`InputTriggerPlugin<Actionlike>`] with your [`Actionlike`] type.
-#[derive(Debug, Deref, DerefMut, Reflect)]
-pub struct JustPressedTrigger<A: Actionlike + Reflect>(pub A);
+#[derive(Debug, Deref, DerefMut)]
+pub struct JustPressedTrigger<A: Actionlike>(pub A);
 
-impl<A: Actionlike + Reflect> BoolTrigger for JustPressedTrigger<A> {
+impl<A: Actionlike> BoolTrigger for JustPressedTrigger<A> {
     type Param<'w, 's> = Query<'w, 's, &'static ActionState<A>>;
 
     fn trigger(&self, entity: Entity, actors: &Self::Param<'_, '_>) -> bool {
@@ -390,10 +390,10 @@ impl<A: Actionlike + Reflect> BoolTrigger for JustPressedTrigger<A> {
 
 /// Trigger that transitions while pressing the given [`Actionlike`]. You must add
 /// an [`InputTriggerPlugin<Actionlike>`] with your [`Actionlike`] type.
-#[derive(Debug, Deref, DerefMut, Reflect)]
-pub struct PressedTrigger<A: Actionlike + Reflect>(pub A);
+#[derive(Debug, Deref, DerefMut)]
+pub struct PressedTrigger<A: Actionlike>(pub A);
 
-impl<A: Actionlike + Reflect> BoolTrigger for PressedTrigger<A> {
+impl<A: Actionlike> BoolTrigger for PressedTrigger<A> {
     type Param<'w, 's> = Query<'w, 's, &'static ActionState<A>>;
 
     fn trigger(&self, entity: Entity, actors: &Self::Param<'_, '_>) -> bool {
@@ -412,11 +412,11 @@ impl<A: Actionlike + Reflect> BoolTrigger for PressedTrigger<A> {
 
 /// Trigger that transitions upon releasing the given [`Actionlike`]. You must add
 /// an [`InputTriggerPlugin<Actionlike>`] with your [`Actionlike`] type.
-#[derive(Debug, Deref, DerefMut, Reflect)]
-pub struct JustReleasedTrigger<A: Actionlike + Reflect>(pub A);
+#[derive(Debug, Deref, DerefMut)]
+pub struct JustReleasedTrigger<A: Actionlike>(pub A);
 
 #[cfg(feature = "leafwing_input")]
-impl<A: Actionlike + Reflect> BoolTrigger for JustReleasedTrigger<A> {
+impl<A: Actionlike> BoolTrigger for JustReleasedTrigger<A> {
     type Param<'w, 's> = Query<'w, 's, &'static ActionState<A>>;
 
     fn trigger(&self, entity: Entity, actors: &Self::Param<'_, '_>) -> bool {
@@ -435,10 +435,10 @@ impl<A: Actionlike + Reflect> BoolTrigger for JustReleasedTrigger<A> {
 
 /// Trigger that transitions while the given [`Actionlike`] is released. You must add
 /// an [`InputTriggerPlugin<Actionlike>`] with your [`Actionlike`] type.
-#[derive(Debug, Deref, DerefMut, Reflect)]
-pub struct ReleasedTrigger<A: Actionlike + Reflect>(pub A);
+#[derive(Debug, Deref, DerefMut)]
+pub struct ReleasedTrigger<A: Actionlike>(pub A);
 
-impl<A: Actionlike + Reflect> BoolTrigger for ReleasedTrigger<A> {
+impl<A: Actionlike> BoolTrigger for ReleasedTrigger<A> {
     type Param<'w, 's> = Query<'w, 's, &'static ActionState<A>>;
 
     fn trigger(&self, entity: Entity, actors: &Self::Param<'_, '_>) -> bool {
@@ -457,10 +457,10 @@ impl<A: Actionlike + Reflect> BoolTrigger for ReleasedTrigger<A> {
 
 /// Trigger that always transitions, providing the given [`Actionlike`]'s [`ActionData`].
 /// You must add an [`InputTriggerPlugin<Actionlike>`] with your [`Actionlike`] type.
-#[derive(Debug, Deref, DerefMut, Reflect)]
-pub struct ActionDataTrigger<A: Actionlike + Reflect>(pub A);
+#[derive(Debug, Deref, DerefMut)]
+pub struct ActionDataTrigger<A: Actionlike>(pub A);
 
-impl<A: Actionlike + Reflect> Trigger for ActionDataTrigger<A> {
+impl<A: Actionlike> Trigger for ActionDataTrigger<A> {
     type Param<'w, 's> = Query<'w, 's, &'static ActionState<A>>;
     type Ok = ActionData;
     type Err = Never;
