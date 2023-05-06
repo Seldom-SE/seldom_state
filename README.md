@@ -104,7 +104,7 @@ Add to your `Cargo.toml`
 seldom_state = "*"
 ```
 
-See the `chase.rs` example for futher usage.
+See the `chase.rs` example for further usage.
 
 ## Compatibility
 
