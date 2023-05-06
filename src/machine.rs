@@ -1,38 +1,46 @@
-use std::any::{type_name, Any, TypeId};
-use std::collections::HashMap;
-use std::fmt::Debug;
-use std::marker::PhantomData;
+use std::{
+    any::{type_name, Any, TypeId},
+    fmt::Debug,
+    marker::PhantomData,
+};
 
-use bevy::ecs::system::SystemState;
-use bevy::ecs::system::{Command, EntityCommands};
-use bevy::tasks::{ComputeTaskPool, ParallelSliceMut};
+use bevy::{
+    ecs::system::{Command, EntityCommands, SystemState},
+    tasks::{ComputeTaskPool, ParallelSliceMut},
+    utils::HashMap,
+};
 
-use crate::{prelude::*, state::OnEvent};
+use crate::{prelude::*, set::StateSet, state::OnEvent};
 
-/// This represents something that can be used to perform a transition. We have
-/// a trait for this so we can box it up.
-trait Transition: Debug + Send + Sync + 'static {
-    /// This is guaranteed to be called before all calls to `run`.
-    fn initialize(&mut self, world: &mut World);
-    /// Check whether the transition should be taken. `entity` is the entity
-    /// that contains the state machine. If you want to take the transition,
-    /// use `commands.insert` and return the TypeId you inserted.
-    fn run(&mut self, world: &World, commands: &mut EntityCommands) -> Option<TypeId>;
+pub(crate) fn machine_plugin(app: &mut App) {
+    app.configure_set(StateSet::Transition.in_base_set(CoreSet::PostUpdate))
+        .add_system(transition.in_set(StateSet::Transition));
 }
 
-/// This represents an edge in the state machine. The type parameters represent
-/// the [`Trigger`] that causes this transition to be taken, the function that
-/// takes the trigger's output and builds the next state, and the next state
-/// itself.
-pub struct TransitionImpl<Trig, Prev, Build, Next>
+/// Performs a transition. We have a trait for this so we can erase [`TransitionImpl`]'s generics.
+trait Transition: Debug + Send + Sync + 'static {
+    /// Called before any call to `run`.
+    fn init(&mut self, world: &mut World);
+    /// Checks whether the transition should be taken. `entity` is the entity
+    /// that contains the state machine. To take the transition,
+    /// use [`EntityCommands::insert`] and return the [`TypeId`] of the state you inserted.
+    fn run(&mut self, world: &World, entity: &mut EntityCommands) -> Option<TypeId>;
+}
+
+/// An edge in the state machine. The type parameters are
+/// the [`Trigger`] that causes this transition, the previous state the function that
+/// takes the trigger's output and builds the next state, and the next state itself.
+struct TransitionImpl<Trig, Prev, Build, Next>
 where
     Trig: Trigger,
-    Build: Fn(Trig::Ok) -> Option<Next>,
+    Prev: MachineState,
+    Build: 'static + Fn(Trig::Ok) -> Option<Next> + Send + Sync,
+    Next: MachineState,
 {
     pub trigger: Trig,
     pub builder: Build,
-    // In order to actually run this, we need to carry around a SystemState. We can't initialize
-    // that until we have a World, so this starts out empty.
+    // To run this, we need a [`SystemState`]. We can't initialize
+    // that until we have a [`World`], so it starts out empty.
     system_state: Option<SystemState<Trig::Param<'static, 'static>>>,
     phantom: PhantomData<Prev>,
 }
@@ -40,7 +48,9 @@ where
 impl<Trig, Prev, Build, Next> Debug for TransitionImpl<Trig, Prev, Build, Next>
 where
     Trig: Trigger,
-    Build: Fn(Trig::Ok) -> Option<Next> + 'static,
+    Prev: MachineState,
+    Build: Fn(Trig::Ok) -> Option<Next> + Send + Sync,
+    Next: MachineState,
 {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         f.debug_struct("TransitionImpl")
@@ -52,31 +62,14 @@ where
     }
 }
 
-impl<Trig, Prev, Build, Next> TransitionImpl<Trig, Prev, Build, Next>
-where
-    Trig: Trigger,
-    Prev: Bundle,
-    Build: Fn(Trig::Ok) -> Option<Next>,
-    Next: Bundle,
-{
-    pub fn new(trigger: Trig, builder: Build) -> Self {
-        Self {
-            trigger,
-            builder,
-            system_state: None,
-            phantom: PhantomData,
-        }
-    }
-}
-
 impl<Trig, Prev, Build, Next> Transition for TransitionImpl<Trig, Prev, Build, Next>
 where
     Trig: Trigger,
-    Prev: Bundle,
-    Build: Fn(Trig::Ok) -> Option<Next> + Send + Sync + 'static,
-    Next: Bundle,
+    Prev: MachineState,
+    Build: Fn(Trig::Ok) -> Option<Next> + Send + Sync,
+    Next: MachineState,
 {
-    fn initialize(&mut self, world: &mut World) {
+    fn init(&mut self, world: &mut World) {
         self.system_state = Some(SystemState::new(world));
     }
 
@@ -93,10 +86,27 @@ where
     }
 }
 
-/// Stores information about each state type.
+impl<Trig, Prev, Build, Next> TransitionImpl<Trig, Prev, Build, Next>
+where
+    Trig: Trigger,
+    Prev: MachineState,
+    Build: Fn(Trig::Ok) -> Option<Next> + Send + Sync,
+    Next: MachineState,
+{
+    pub fn new(trigger: Trig, builder: Build) -> Self {
+        Self {
+            trigger,
+            builder,
+            system_state: None,
+            phantom: PhantomData,
+        }
+    }
+}
+
+/// Information about a state
 #[derive(Debug)]
 struct StateMetadata {
-    /// Used for better debug information.
+    /// For debug information
     name: String,
     on_enter: Vec<OnEvent>,
     on_exit: Vec<OnEvent>,
@@ -112,7 +122,7 @@ impl StateMetadata {
     }
 }
 
-/// The state of a StateMachine before it's actually run. We have an explicit
+/// The state of a [`StateMachine`] before it's actually run. We have an explicit
 /// state for this so that we can make sure that on_enter triggers and so on
 /// run properly.
 #[derive(Clone, Component, Reflect)]
@@ -149,13 +159,6 @@ impl StateMachine {
         machine.trans::<InitialState>(AlwaysTrigger, initial)
     }
 
-    /// Get the medatada for the given state, creating it if necessary.
-    fn metadata_mut<S: MachineState>(&mut self) -> &mut StateMetadata {
-        self.states
-            .entry(TypeId::of::<S>())
-            .or_insert(StateMetadata::new::<S>())
-    }
-
     /// Adds a transition to the state machine. When the entity is in the state
     /// given as a type parameter, and the given trigger occurs, it will transition
     /// to the state given as a function parameter.
@@ -163,19 +166,26 @@ impl StateMachine {
         self.trans_builder::<S, _, _>(trigger, move |_| Some(state.clone()))
     }
 
+    /// Get the medatada for the given state, creating it if necessary.
+    fn metadata_mut<S: MachineState>(&mut self) -> &mut StateMetadata {
+        self.states
+            .entry(TypeId::of::<S>())
+            .or_insert(StateMetadata::new::<S>())
+    }
+
     /// Adds a transition builder to the state machine. When the entity is in `P` state, and `T`
     /// occurs, the given builder will be run on `T`'s `Result` type. If the builder returns
     /// `Some(N)`, the machine will transition to that `N` state.
-    pub fn trans_builder<P: MachineState, T: Trigger, N: MachineState>(
+    pub fn trans_builder<Prev: MachineState, Trig: Trigger, Next: MachineState>(
         mut self,
-        trigger: T,
-        builder: impl 'static + Clone + Fn(T::Ok) -> Option<N> + Send + Sync,
+        trigger: Trig,
+        builder: impl 'static + Clone + Fn(Trig::Ok) -> Option<Next> + Send + Sync,
     ) -> Self {
-        self.metadata_mut::<P>();
-        self.metadata_mut::<N>();
-        let transition: TransitionImpl<T, P, _, N> = TransitionImpl::new(trigger, builder);
+        self.metadata_mut::<Prev>();
+        self.metadata_mut::<Next>();
+        let transition = TransitionImpl::<_, Prev, _, _>::new(trigger, builder);
         self.transitions.push((
-            TypeId::of::<P>(),
+            TypeId::of::<Prev>(),
             Box::new(transition) as Box<dyn Transition>,
         ));
         self
@@ -250,9 +260,9 @@ impl StateMachine {
     /// Initialize all transitions. Must be executed before `run`. This is
     /// separate because `run` is parallelizable (takes a `&World`) but this
     /// isn't (takes a `&mut World`).
-    fn initialize(&mut self, world: &mut World) {
+    fn init_transitions(&mut self, world: &mut World) {
         for transition in self.transitions_mut() {
-            transition.initialize(world);
+            transition.init(world);
         }
     }
 
@@ -291,7 +301,7 @@ impl StateMachine {
 }
 
 /// Runs all transitions on all entities.
-pub(crate) fn transition_system(
+pub(crate) fn transition(
     world: &mut World,
     system_state: &mut SystemState<ParallelCommands>,
     machine_query: &mut QueryState<(Entity, &mut StateMachine)>,
@@ -311,7 +321,7 @@ pub(crate) fn transition_system(
 
     // world is mutable here, since initialization require mutating the world
     for (_, machine) in borrowed_machines.iter_mut() {
-        machine.initialize(world);
+        machine.init_transitions(world);
     }
 
     // world is not mutated here; the state machines are not in the world, and
@@ -338,8 +348,7 @@ pub(crate) fn transition_system(
 mod tests {
     use super::*;
 
-    // Just some test states to transition between.
-
+    // Test states to transition between.
     #[derive(Component, Clone, Reflect)]
     struct StateOne;
     #[derive(Component, Clone, Reflect)]
@@ -350,7 +359,7 @@ mod tests {
     #[derive(Resource)]
     struct SomeResource;
 
-    /// Triggers when SomeResource is present.
+    /// Triggers when `SomeResource` is present.
     #[derive(Reflect)]
     struct ResourcePresent;
 
@@ -365,7 +374,7 @@ mod tests {
     #[test]
     fn test_sets_initial_state() {
         let mut app = App::new();
-        app.add_system(transition_system);
+        app.add_system(transition);
         let machine = StateMachine::new(StateOne);
         let entity = app.world.spawn(machine).id();
         app.update();
@@ -379,7 +388,7 @@ mod tests {
     #[test]
     fn test_machine() {
         let mut app = App::new();
-        app.add_system(transition_system);
+        app.add_system(transition);
 
         let machine = StateMachine::new(StateOne)
             .trans::<StateOne>(AlwaysTrigger, StateTwo)
@@ -409,7 +418,7 @@ mod tests {
     #[test]
     fn test_self_transition() {
         let mut app = App::new();
-        app.add_system(transition_system);
+        app.add_system(transition);
 
         let entity = app
             .world

@@ -8,10 +8,9 @@ pub mod set;
 mod state;
 mod trigger;
 
-use machine::transition_system;
+use machine::machine_plugin;
 use prelude::*;
-use set::StateSet;
-use trigger::remove_done_markers;
+use trigger::trigger_plugin;
 
 /// Add to your app to use this crate.
 #[derive(Debug, Default)]
@@ -26,9 +25,7 @@ impl Plugin for StateMachinePlugin {
 /// Function called by [`StateMachinePlugin`]. You may instead call it directly
 /// or use `seldom_fn_plugin`, which is another crate I maintain.
 pub fn state_machine_plugin(app: &mut App) {
-    app.configure_set(StateSet::Transition.in_base_set(CoreSet::PostUpdate))
-        .add_system(transition_system.in_set(StateSet::Transition))
-        .add_system(remove_done_markers.in_set(StateSet::Transition));
+    app.fn_plugin(machine_plugin).fn_plugin(trigger_plugin);
 }
 
 /// Module for convenient imports. Use with `use seldom_state::prelude::*;`.

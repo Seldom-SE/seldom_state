@@ -11,7 +11,16 @@ use std::{convert::Infallible, fmt::Debug};
 
 use bevy::ecs::system::{ReadOnlySystemParam, SystemParam};
 
-use crate::prelude::*;
+use crate::{prelude::*, set::StateSet};
+
+pub(crate) fn trigger_plugin(app: &mut App) {
+    app.configure_set(
+        StateSet::RemoveDoneMarkers
+            .in_base_set(CoreSet::PostUpdate)
+            .after(StateSet::Transition),
+    )
+    .add_system(remove_done_markers.in_set(StateSet::RemoveDoneMarkers));
+}
 
 /// Wrapper for [`core::convert::Infallible`]. Use for [`Trigger::Err`] if the trigger
 /// is infallible.

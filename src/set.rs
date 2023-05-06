@@ -7,4 +7,6 @@ use crate::prelude::*;
 pub enum StateSet {
     /// Do state transitions
     Transition,
+    /// Remove `Done` markers
+    RemoveDoneMarkers,
 }

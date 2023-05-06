@@ -83,7 +83,7 @@ impl<C: Clone + Command + Sync> CommandEvent for C {
 
 #[cfg(test)]
 mod tests {
-    use crate::machine::transition_system;
+    use crate::machine::transition;
 
     use super::*;
 
@@ -100,7 +100,7 @@ mod tests {
     #[test]
     fn test_triggers() {
         let mut app = App::new();
-        app.add_system(transition_system);
+        app.add_system(transition);
 
         let machine = StateMachine::new(StateOne)
             .trans::<StateOne>(AlwaysTrigger, StateTwo)
@@ -123,45 +123,3 @@ mod tests {
         );
     }
 }
-
-// An attempt to rebuild the state bundle from the world:
-
-// struct StateMarker<T: MachineState>(PhantomData<T>);
-//
-// impl<T: MachineState> StateMarker<T> {
-//     fn get(world: &World, entity: Entity, state: Box<dyn DynState>) -> &T {
-//         let bundles = world.bundles();
-//         let components = bundles
-//             .get(bundles.get_id(TypeId::of::<T>()).unwrap())
-//             .unwrap()
-//             .components()
-//             .iter()
-//             .map(|component| {
-//                 (
-//                     world
-//                         .components()
-//                         .get_info(*component)
-//                         .unwrap()
-//                         .type_id()
-//                         .unwrap(),
-//                     world.get_by_id(entity, *component).unwrap(),
-//                 )
-//             })
-//             .collect::<HashMap<_, _>>();
-//
-//         if let Some(component) = components.get(&state.type_id()) {
-//             return unsafe { component.deref() }
-//         }
-//
-//         match state.get_type_info() {
-//             TypeInfo::Struct(info) => {
-//                 let val = DynamicStruct::default();
-//                 for field in info.iter() {
-//                     let component = components.get(&field.type_id()).unwrap();
-//                     val.insert(field.name(), unsafe { component.deref() }.);
-//
-//                 },
-//             }
-//         }
-//     }
-// }
