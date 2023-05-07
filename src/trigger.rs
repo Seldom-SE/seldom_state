@@ -8,7 +8,7 @@ pub use input::{
     JustPressedTrigger, JustReleasedTrigger, PressedTrigger, ReleasedTrigger, ValueTrigger,
 };
 
-use std::{any::type_name, convert::Infallible, fmt::Debug};
+use std::{any::type_name, convert::Infallible, fmt::Debug, marker::PhantomData};
 
 use bevy::ecs::system::{ReadOnlySystemParam, SystemParam};
 
@@ -53,7 +53,7 @@ pub trait Trigger: 'static + Send + Sized + Sync {
     fn trigger(
         &self,
         entity: Entity,
-        param: &<<Self as Trigger>::Param<'_, '_> as SystemParam>::Item<'_, '_>,
+        param: <<Self as Trigger>::Param<'_, '_> as SystemParam>::Item<'_, '_>,
     ) -> Result<Self::Ok, Self::Err>;
 
     /// Gets the name of the type, for use in logging
@@ -93,7 +93,7 @@ pub trait OptionTrigger: 'static + Send + Sync {
     fn trigger(
         &self,
         entity: Entity,
-        param: &<<Self as OptionTrigger>::Param<'_, '_> as SystemParam>::Item<'_, '_>,
+        param: <<Self as OptionTrigger>::Param<'_, '_> as SystemParam>::Item<'_, '_>,
     ) -> Option<Self::Some>;
 }
 
@@ -105,7 +105,7 @@ impl<T: OptionTrigger> Trigger for T {
     fn trigger(
         &self,
         entity: Entity,
-        param: &<<Self as Trigger>::Param<'_, '_> as SystemParam>::Item<'_, '_>,
+        param: <<Self as Trigger>::Param<'_, '_> as SystemParam>::Item<'_, '_>,
     ) -> Result<Self::Ok, ()> {
         OptionTrigger::trigger(self, entity, param).ok_or(())
     }
@@ -123,7 +123,7 @@ pub trait BoolTrigger: 'static + Send + Sync {
     fn trigger(
         &self,
         entity: Entity,
-        param: &<<Self as BoolTrigger>::Param<'_, '_> as SystemParam>::Item<'_, '_>,
+        param: <<Self as BoolTrigger>::Param<'_, '_> as SystemParam>::Item<'_, '_>,
     ) -> bool;
 }
 
@@ -134,7 +134,7 @@ impl<T: BoolTrigger> OptionTrigger for T {
     fn trigger(
         &self,
         entity: Entity,
-        param: &<<Self as Trigger>::Param<'_, '_> as SystemParam>::Item<'_, '_>,
+        param: <<Self as Trigger>::Param<'_, '_> as SystemParam>::Item<'_, '_>,
     ) -> Option<()> {
         BoolTrigger::trigger(self, entity, param).then_some(())
     }
@@ -149,7 +149,7 @@ impl Trigger for AlwaysTrigger {
     type Ok = ();
     type Err = Never;
 
-    fn trigger(&self, _: Entity, _: &()) -> Result<(), Never> {
+    fn trigger(&self, _: Entity, _: ()) -> Result<(), Never> {
         Ok(())
     }
 }
@@ -166,7 +166,7 @@ impl<T: Trigger> Trigger for NotTrigger<T> {
     fn trigger(
         &self,
         entity: Entity,
-        param: &<<Self as Trigger>::Param<'_, '_> as SystemParam>::Item<'_, '_>,
+        param: <<Self as Trigger>::Param<'_, '_> as SystemParam>::Item<'_, '_>,
     ) -> Result<T::Err, T::Ok> {
         let Self(trigger) = self;
         match trigger.trigger(entity, param) {
@@ -188,7 +188,7 @@ impl<T: Trigger, U: Trigger> Trigger for AndTrigger<T, U> {
     fn trigger(
         &self,
         entity: Entity,
-        (param1, param2): &<<Self as Trigger>::Param<'_, '_> as SystemParam>::Item<'_, '_>,
+        (param1, param2): <<Self as Trigger>::Param<'_, '_> as SystemParam>::Item<'_, '_>,
     ) -> Result<(T::Ok, U::Ok), Either<T::Err, U::Err>> {
         let Self(trigger1, trigger2) = self;
         Ok((
@@ -210,7 +210,7 @@ impl<T: Trigger, U: Trigger> Trigger for OrTrigger<T, U> {
     fn trigger(
         &self,
         entity: Entity,
-        (param1, param2): &<<Self as Trigger>::Param<'_, '_> as SystemParam>::Item<'_, '_>,
+        (param1, param2): <<Self as Trigger>::Param<'_, '_> as SystemParam>::Item<'_, '_>,
     ) -> Result<Either<T::Ok, U::Ok>, (T::Err, U::Err)> {
         let Self(trigger1, trigger2) = self;
         match trigger1.trigger(entity, param1) {
@@ -247,7 +247,7 @@ pub enum DoneTrigger {
 impl BoolTrigger for DoneTrigger {
     type Param<'w, 's> = Query<'w, 's, &'static Done>;
 
-    fn trigger(&self, entity: Entity, param: &Self::Param<'_, '_>) -> bool {
+    fn trigger(&self, entity: Entity, param: Self::Param<'_, '_>) -> bool {
         param
             .get(entity)
             .map(|done| self.as_done() == *done)
@@ -261,6 +261,23 @@ impl DoneTrigger {
             Self::Success => Done::Success,
             Self::Failure => Done::Failure,
         }
+    }
+}
+
+/// Trigger that transitions when it receives the associated event
+#[derive(Debug, Default)]
+pub struct EventTrigger<T: Clone + Send + Sync>(PhantomData<T>);
+
+impl<T: 'static + Clone + Send + Sync> OptionTrigger for EventTrigger<T> {
+    type Param<'w, 's> = EventReader<'w, 's, T>;
+    type Some = T;
+
+    fn trigger(
+        &self,
+        _: Entity,
+        mut events: Self::Param<'_, '_>,
+    ) -> Option<<Self as OptionTrigger>::Some> {
+        events.iter().next().cloned()
     }
 }
 

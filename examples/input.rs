@@ -54,15 +54,18 @@ fn init(mut commands: Commands, asset_server: Res<AssetServer>) {
             // When the player hits the ground, idle
             .trans::<Falling>(GroundedTrigger, Grounded::Idle)
             // When the player is grounded, set their movement direction
-            .trans_builder::<Grounded, _, _>(ValueTrigger::unbounded(Action::Move), |value| {
-                Some(match value {
-                    value if value > 0.5 => Grounded::Right,
-                    value if value < -0.5 => Grounded::Left,
-                    _ => Grounded::Idle,
-                })
-            })
+            .trans_builder(
+                ValueTrigger::unbounded(Action::Move),
+                |_: &Grounded, value| {
+                    Some(match value {
+                        value if value > 0.5 => Grounded::Right,
+                        value if value < -0.5 => Grounded::Left,
+                        _ => Grounded::Idle,
+                    })
+                },
+            )
             .set_trans_logging(true),
-        Grouded::Idle,
+        Grounded::Idle,
     ));
 }
 
@@ -78,7 +81,7 @@ struct GroundedTrigger;
 impl BoolTrigger for GroundedTrigger {
     type Param<'w, 's> = Query<'w, 's, (&'static Transform, &'static Falling)>;
 
-    fn trigger(&self, entity: Entity, fallings: &Self::Param<'_, '_>) -> bool {
+    fn trigger(&self, entity: Entity, fallings: Self::Param<'_, '_>) -> bool {
         let (transform, falling) = fallings.get(entity).unwrap();
         transform.translation.y <= 0. && falling.velocity <= 0.
     }

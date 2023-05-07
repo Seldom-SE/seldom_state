@@ -99,7 +99,7 @@ impl Trigger for Near {
     fn trigger(
         &self,
         entity: Entity,
-        (transforms, _time): &Self::Param<'_, '_>,
+        (transforms, _time): Self::Param<'_, '_>,
     ) -> Result<f32, f32> {
         // Find the distance between the target and this entity
         let distance = transforms

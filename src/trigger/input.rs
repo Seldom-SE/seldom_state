@@ -23,7 +23,7 @@ impl<A: Actionlike> Trigger for ValueTrigger<A> {
     type Ok = f32;
     type Err = f32;
 
-    fn trigger(&self, entity: Entity, actors: &Self::Param<'_, '_>) -> Result<f32, f32> {
+    fn trigger(&self, entity: Entity, actors: Self::Param<'_, '_>) -> Result<f32, f32> {
         let value = actors
             .get(entity)
             .unwrap_or_else(|_| {
@@ -86,7 +86,7 @@ impl<A: Actionlike> Trigger for ClampedValueTrigger<A> {
     type Ok = f32;
     type Err = f32;
 
-    fn trigger(&self, entity: Entity, actors: &Self::Param<'_, '_>) -> Result<f32, f32> {
+    fn trigger(&self, entity: Entity, actors: Self::Param<'_, '_>) -> Result<f32, f32> {
         let value = actors
             .get(entity)
             .unwrap_or_else(|_| {
@@ -145,11 +145,9 @@ pub struct AxisPairTrigger<A: Actionlike> {
     pub max_length: f32,
     /// Minimum rotation, measured clockwise from midnight. If rotation bounds are not necessary,
     /// set this and `max_rotation` to the same value.
-    #[reflect(ignore)]
     pub min_rotation: Rotation,
     /// Maximum rotation, measured clockwise from midnight. If rotation bounds are not necessary,
     /// set this and `min_rotation` to the same value.
-    #[reflect(ignore)]
     pub max_rotation: Rotation,
 }
 
@@ -161,7 +159,7 @@ impl<A: Actionlike> Trigger for AxisPairTrigger<A> {
     fn trigger(
         &self,
         entity: Entity,
-        actors: &Self::Param<'_, '_>,
+        actors: Self::Param<'_, '_>,
     ) -> Result<DualAxisData, Option<DualAxisData>> {
         let axis_pair = actors
             .get(entity)
@@ -262,11 +260,9 @@ pub struct ClampedAxisPairTrigger<A: Actionlike> {
     pub max_length: f32,
     /// Minimum rotation, measured clockwise from midnight. If rotation bounds are not necessary,
     /// set this and `max_rotation` to the same value.
-    #[reflect(ignore)]
     pub min_rotation: Rotation,
     /// Maximum rotation, measured clockwise from midnight. If rotation bounds are not necessary,
     /// set this and `min_rotation` to the same value.
-    #[reflect(ignore)]
     pub max_rotation: Rotation,
 }
 
@@ -278,7 +274,7 @@ impl<A: Actionlike> Trigger for ClampedAxisPairTrigger<A> {
     fn trigger(
         &self,
         entity: Entity,
-        actors: &Self::Param<'_, '_>,
+        actors: Self::Param<'_, '_>,
     ) -> Result<DualAxisData, Option<DualAxisData>> {
         let axis_pair = actors
             .get(entity)
@@ -374,7 +370,7 @@ pub struct JustPressedTrigger<A: Actionlike>(pub A);
 impl<A: Actionlike> BoolTrigger for JustPressedTrigger<A> {
     type Param<'w, 's> = Query<'w, 's, &'static ActionState<A>>;
 
-    fn trigger(&self, entity: Entity, actors: &Self::Param<'_, '_>) -> bool {
+    fn trigger(&self, entity: Entity, actors: Self::Param<'_, '_>) -> bool {
         let Self(action) = self;
         actors
             .get(entity)
@@ -396,7 +392,7 @@ pub struct PressedTrigger<A: Actionlike>(pub A);
 impl<A: Actionlike> BoolTrigger for PressedTrigger<A> {
     type Param<'w, 's> = Query<'w, 's, &'static ActionState<A>>;
 
-    fn trigger(&self, entity: Entity, actors: &Self::Param<'_, '_>) -> bool {
+    fn trigger(&self, entity: Entity, actors: Self::Param<'_, '_>) -> bool {
         let Self(action) = self;
         actors
             .get(entity)
@@ -419,7 +415,7 @@ pub struct JustReleasedTrigger<A: Actionlike>(pub A);
 impl<A: Actionlike> BoolTrigger for JustReleasedTrigger<A> {
     type Param<'w, 's> = Query<'w, 's, &'static ActionState<A>>;
 
-    fn trigger(&self, entity: Entity, actors: &Self::Param<'_, '_>) -> bool {
+    fn trigger(&self, entity: Entity, actors: Self::Param<'_, '_>) -> bool {
         let Self(action) = self;
         actors
             .get(entity)
@@ -441,7 +437,7 @@ pub struct ReleasedTrigger<A: Actionlike>(pub A);
 impl<A: Actionlike> BoolTrigger for ReleasedTrigger<A> {
     type Param<'w, 's> = Query<'w, 's, &'static ActionState<A>>;
 
-    fn trigger(&self, entity: Entity, actors: &Self::Param<'_, '_>) -> bool {
+    fn trigger(&self, entity: Entity, actors: Self::Param<'_, '_>) -> bool {
         let Self(action) = self;
         actors
             .get(entity)
@@ -465,7 +461,7 @@ impl<A: Actionlike> Trigger for ActionDataTrigger<A> {
     type Ok = ActionData;
     type Err = Never;
 
-    fn trigger(&self, entity: Entity, actors: &Self::Param<'_, '_>) -> Result<ActionData, Never> {
+    fn trigger(&self, entity: Entity, actors: Self::Param<'_, '_>) -> Result<ActionData, Never> {
         let Self(action) = self;
         Ok(actors
             .get(entity)

@@ -80,7 +80,7 @@ where
 
     fn run(&mut self, world: &World, entity: Entity) -> Option<(Box<dyn Insert>, TypeId)> {
         let state = self.system_state.as_mut().unwrap();
-        let Ok(res) = self.trigger.trigger(entity, &state.get(world)) else { return None };
+        let Ok(res) = self.trigger.trigger(entity, state.get(world)) else { return None };
         (self.builder)(Prev::from_entity(entity, world), res)
             .map(|state| (Box::new(state) as Box<dyn Insert>, TypeId::of::<Next>()))
     }
@@ -388,7 +388,7 @@ mod tests {
     impl BoolTrigger for ResourcePresent {
         type Param<'w, 's> = Option<Res<'w, SomeResource>>;
 
-        fn trigger(&self, _entity: Entity, param: &Self::Param<'_, '_>) -> bool {
+        fn trigger(&self, _entity: Entity, param: Self::Param<'_, '_>) -> bool {
             param.is_some()
         }
     }

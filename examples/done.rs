@@ -48,11 +48,11 @@ impl OptionTrigger for Click {
     type Param<'w, 's> = (Res<'w, Input<MouseButton>>, Res<'w, CursorPosition>);
     type Some = Vec2;
 
-    fn trigger(&self, _: Entity, (mouse, cursor_position): &Self::Param<'_, '_>) -> Option<Vec2> {
+    fn trigger(&self, _: Entity, (mouse, cursor_position): Self::Param<'_, '_>) -> Option<Vec2> {
         mouse
             .just_pressed(MouseButton::Left)
             .then_some(())
-            .and(***cursor_position)
+            .and(**cursor_position)
     }
 }
 
