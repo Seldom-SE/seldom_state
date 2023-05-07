@@ -7,37 +7,51 @@ use bevy::ecs::system::{Command, EntityCommands};
 
 use crate::prelude::*;
 
+use self::sealed::MachineStateSealed;
+
+mod sealed {
+    use bevy::ecs::system::EntityCommands;
+
+    use crate::prelude::*;
+
+    pub trait MachineStateSealed {
+        fn from_entity(entity: Entity, world: &World) -> &Self;
+        fn remove(entity: &mut EntityCommands);
+    }
+
+    impl<T: Clone + Component> MachineStateSealed for T {
+        fn from_entity(entity: Entity, world: &World) -> &Self {
+            world.entity(entity).get().unwrap()
+        }
+
+        fn remove(entity: &mut EntityCommands) {
+            entity.remove::<Self>();
+        }
+    }
+
+    impl MachineStateSealed for AnyState {
+        fn from_entity(_: Entity, _: &World) -> &Self {
+            &AnyState(())
+        }
+
+        fn remove(_: &mut EntityCommands) {}
+    }
+}
+
 /// A state that an entity may be in.
 ///
 /// If you are concerned with performance, consider having your states use sparse set storage,
 /// since they may be added to and removed from entities.
-pub trait MachineState: 'static + Clone + Send + Sync {
-    fn from_entity(entity: Entity, world: &World) -> &Self;
-    fn remove(entity: &mut EntityCommands);
-}
+pub trait MachineState: 'static + Clone + Send + Sync + MachineStateSealed {}
 
-impl<T: Clone + Component> MachineState for T {
-    fn from_entity(entity: Entity, world: &World) -> &Self {
-        world.entity(entity).get().unwrap()
-    }
-
-    fn remove(entity: &mut EntityCommands) {
-        entity.remove::<Self>();
-    }
-}
+impl<T: Clone + Component> MachineState for T {}
 
 /// State that represents any state. Transitions from [`AnyState`] may transition
 /// from any other state.
 #[derive(Clone, Debug)]
-pub struct AnyState(());
+pub struct AnyState(pub(crate) ());
 
-impl MachineState for AnyState {
-    fn from_entity(_: Entity, _: &World) -> &Self {
-        &AnyState(())
-    }
-
-    fn remove(_: &mut EntityCommands) {}
-}
+impl MachineState for AnyState {}
 
 pub(crate) trait Insert: Send {
     fn insert(self: Box<Self>, entity: &mut EntityCommands) -> TypeId;
