@@ -37,8 +37,8 @@ struct TransitionImpl<Trig, Prev, Build, Next>
 where
     Trig: Trigger,
     Prev: MachineState,
-    Build: 'static + Fn(Trig::Ok) -> Option<Next> + Send + Sync,
-    Next: MachineState,
+    Build: 'static + Fn(&Prev, Trig::Ok) -> Option<Next> + Send + Sync,
+    Next: Component + MachineState,
 {
     pub trigger: Trig,
     pub builder: Build,
@@ -52,8 +52,8 @@ impl<Trig, Prev, Build, Next> Debug for TransitionImpl<Trig, Prev, Build, Next>
 where
     Trig: Trigger,
     Prev: MachineState,
-    Build: Fn(Trig::Ok) -> Option<Next> + Send + Sync,
-    Next: MachineState,
+    Build: Fn(&Prev, Trig::Ok) -> Option<Next> + Send + Sync,
+    Next: Component + MachineState,
 {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         f.debug_struct("TransitionImpl")
@@ -69,8 +69,8 @@ impl<Trig, Prev, Build, Next> Transition for TransitionImpl<Trig, Prev, Build, N
 where
     Trig: Trigger,
     Prev: MachineState,
-    Build: Fn(Trig::Ok) -> Option<Next> + Send + Sync,
-    Next: MachineState,
+    Build: Fn(&Prev, Trig::Ok) -> Option<Next> + Send + Sync,
+    Next: Component + MachineState,
 {
     fn init(&mut self, world: &mut World) {
         if self.system_state.is_none() {
@@ -81,7 +81,8 @@ where
     fn run(&mut self, world: &World, entity: Entity) -> Option<(Box<dyn Insert>, TypeId)> {
         let state = self.system_state.as_mut().unwrap();
         let Ok(res) = self.trigger.trigger(entity, &state.get(world)) else { return None };
-        (self.builder)(res).map(|state| (Box::new(state) as Box<dyn Insert>, TypeId::of::<Next>()))
+        (self.builder)(Prev::from_entity(entity, world), res)
+            .map(|state| (Box::new(state) as Box<dyn Insert>, TypeId::of::<Next>()))
     }
 }
 
@@ -89,8 +90,8 @@ impl<Trig, Prev, Build, Next> TransitionImpl<Trig, Prev, Build, Next>
 where
     Trig: Trigger,
     Prev: MachineState,
-    Build: Fn(Trig::Ok) -> Option<Next> + Send + Sync,
-    Next: MachineState,
+    Build: Fn(&Prev, Trig::Ok) -> Option<Next> + Send + Sync,
+    Next: Component + MachineState,
 {
     pub fn new(trigger: Trig, builder: Build) -> Self {
         Self {
@@ -112,12 +113,12 @@ struct StateMetadata {
 }
 
 impl StateMetadata {
-    fn new<S: Bundle>() -> Self {
+    fn new<S: MachineState>() -> Self {
         Self {
             name: type_name::<S>().to_owned(),
             on_enter: default(),
             on_exit: vec![OnEvent::Entity(Box::new(|entity: &mut EntityCommands| {
-                entity.remove::<S>();
+                S::remove(entity);
             }))],
         }
     }
@@ -142,7 +143,14 @@ pub struct StateMachine {
 impl Default for StateMachine {
     fn default() -> Self {
         Self {
-            states: HashMap::from([(TypeId::of::<AnyState>(), StateMetadata::new::<AnyState>())]),
+            states: HashMap::from([(
+                TypeId::of::<AnyState>(),
+                StateMetadata {
+                    name: "AnyState".to_owned(),
+                    on_enter: vec![],
+                    on_exit: vec![],
+                },
+            )]),
             transitions: vec![],
             log_transitions: false,
         }
@@ -151,7 +159,7 @@ impl Default for StateMachine {
 
 impl StateMachine {
     /// Registers a state. This is only necessary for states that are not used in any transitions.
-    pub fn with_state<S: MachineState>(mut self) -> Self {
+    pub fn with_state<S: Clone + Component>(mut self) -> Self {
         self.metadata_mut::<S>();
         self
     }
@@ -159,8 +167,12 @@ impl StateMachine {
     /// Adds a transition to the state machine. When the entity is in the state
     /// given as a type parameter, and the given trigger occurs, it will transition
     /// to the state given as a function parameter.
-    pub fn trans<S: MachineState>(self, trigger: impl Trigger, state: impl MachineState) -> Self {
-        self.trans_builder::<S, _, _>(trigger, move |_| Some(state.clone()))
+    pub fn trans<S: MachineState>(
+        self,
+        trigger: impl Trigger,
+        state: impl Clone + Component,
+    ) -> Self {
+        self.trans_builder(trigger, move |_: &S, _| Some(state.clone()))
     }
 
     /// Get the medatada for the given state, creating it if necessary.
@@ -173,10 +185,10 @@ impl StateMachine {
     /// Adds a transition builder to the state machine. When the entity is in `P` state, and `T`
     /// occurs, the given builder will be run on `T`'s `Result` type. If the builder returns
     /// `Some(N)`, the machine will transition to that `N` state.
-    pub fn trans_builder<Prev: MachineState, Trig: Trigger, Next: MachineState>(
+    pub fn trans_builder<Prev: MachineState, Trig: Trigger, Next: Clone + Component>(
         mut self,
         trigger: Trig,
-        builder: impl 'static + Clone + Fn(Trig::Ok) -> Option<Next> + Send + Sync,
+        builder: impl 'static + Clone + Fn(&Prev, Trig::Ok) -> Option<Next> + Send + Sync,
     ) -> Self {
         self.metadata_mut::<Prev>();
         self.metadata_mut::<Next>();

@@ -27,7 +27,7 @@ fn init(mut commands: Commands, asset_server: Res<AssetServer>) {
         Player,
         StateMachine::default()
             // When the player clicks, go there
-            .trans_builder::<AnyState, _, _>(Click, |pos| {
+            .trans_builder(Click, |_: &AnyState, pos| {
                 Some(GoToSelection {
                     speed: 200.,
                     target: pos,

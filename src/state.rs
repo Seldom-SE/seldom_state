@@ -11,20 +11,39 @@ use crate::prelude::*;
 ///
 /// If you are concerned with performance, consider having your states use sparse set storage,
 /// since they may be added to and removed from entities.
-pub trait MachineState: Clone + Component {}
+pub trait MachineState: 'static + Clone + Send + Sync {
+    fn from_entity(entity: Entity, world: &World) -> &Self;
+    fn remove(entity: &mut EntityCommands);
+}
 
-impl<T: Clone + Component> MachineState for T {}
+impl<T: Clone + Component> MachineState for T {
+    fn from_entity(entity: Entity, world: &World) -> &Self {
+        world.entity(entity).get().unwrap()
+    }
+
+    fn remove(entity: &mut EntityCommands) {
+        entity.remove::<Self>();
+    }
+}
 
 /// State that represents any state. Transitions from [`AnyState`] may transition
 /// from any other state.
-#[derive(Clone, Component, Debug)]
-pub enum AnyState {}
+#[derive(Clone, Debug)]
+pub struct AnyState(());
+
+impl MachineState for AnyState {
+    fn from_entity(_: Entity, _: &World) -> &Self {
+        &AnyState(())
+    }
+
+    fn remove(_: &mut EntityCommands) {}
+}
 
 pub(crate) trait Insert: Send {
     fn insert(self: Box<Self>, entity: &mut EntityCommands) -> TypeId;
 }
 
-impl<S: MachineState> Insert for S {
+impl<S: Component> Insert for S {
     fn insert(self: Box<Self>, entity: &mut EntityCommands) -> TypeId {
         entity.insert(*self);
         TypeId::of::<AnyState>()
