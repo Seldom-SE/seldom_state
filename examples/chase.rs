@@ -44,8 +44,7 @@ fn init(mut commands: Commands, asset_server: Res<AssetServer>) {
             ..default()
         },
         // This state machine handles the enemy's transitions
-        // The initial state is `Idle`
-        StateMachine::new(Idle)
+        StateMachine::default()
             // Add a transition
             // When they're in `Idle` state, and the `near_player` trigger occurs,
             // switch to that instance of the `Follow` state
@@ -64,6 +63,8 @@ fn init(mut commands: Commands, asset_server: Res<AssetServer>) {
             .trans::<Follow>(NotTrigger(near_player), Idle)
             // Enable transition logging
             .set_trans_logging(true),
+        // The initial state is `Idle`
+        Idle,
     ));
 }
 

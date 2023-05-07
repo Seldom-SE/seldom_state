@@ -25,7 +25,7 @@ fn init(mut commands: Commands, asset_server: Res<AssetServer>) {
             ..default()
         },
         Player,
-        StateMachine::new(Idle)
+        StateMachine::default()
             // When the player clicks, go there
             .trans_builder::<AnyState, _, _>(Click, |pos| {
                 Some(GoToSelection {
@@ -37,6 +37,7 @@ fn init(mut commands: Commands, asset_server: Res<AssetServer>) {
             // When they're done going to the selection, idle
             .trans::<GoToSelection>(DoneTrigger::Success, Idle)
             .set_trans_logging(true),
+        Idle,
     ));
 }
 

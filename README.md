@@ -21,12 +21,13 @@ State machines are created like so:
 ```Rust
 commands.spawn((
     // ... (other inserts)
-    StateMachine::new(my_initial_state)
-        .trans::<MyState1>(my_trigger_1, my_state_3)
+    my_initial_state,
+    StateMachine::default()
+        .trans::<MyInitialState>(my_trigger_1, my_state_3)
         .trans::<AnyState>(my_trigger_2, my_state_4)
         .trans_builder::<MyState2, _, _>(my_trigger_3, |trigger_data| make_state_5(trigger_data))
-        .insert_on_enter::<MyState7>(my_bundle)
-        .remove_on_exit::<MyState7, MyBundle>()
+        .on_enter::<MyState7>(|entity| entity.insert(my_bundle))
+        .on_exit::<MyState7>(|entity| entity.remove::<MyBundle>())
         // etc.
 ));
 ```

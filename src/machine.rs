@@ -123,19 +123,11 @@ impl StateMetadata {
     }
 }
 
-/// The state of a [`StateMachine`] before it's actually run. We have an explicit
-/// state for this so that we can make sure that on_enter triggers and so on
-/// run properly.
-#[derive(Clone, Component)]
-struct InitialState;
-
 /// State machine component. Entities with this component will have bundles (the states)
 /// added and removed based on the transitions that you add. Build one
 /// with `StateMachine::new`, `StateMachine::trans`, and other methods.
 #[derive(Component)]
 pub struct StateMachine {
-    /// TypeId of the current state.
-    current: TypeId,
     states: HashMap<TypeId, StateMetadata>,
     /// Each transition and the state it should apply in (or [`AnyState`]). We
     /// store the transitions in a flat list so that we ensure we always check
@@ -147,17 +139,21 @@ pub struct StateMachine {
     log_transitions: bool,
 }
 
-impl StateMachine {
-    /// Creates a state machine with an initial state and no transitions. Add more
-    /// with [`StateMachine::trans`].
-    pub fn new<S: MachineState>(initial: S) -> Self {
-        let machine = Self {
-            current: TypeId::of::<InitialState>(),
+impl Default for StateMachine {
+    fn default() -> Self {
+        Self {
             states: HashMap::from([(TypeId::of::<AnyState>(), StateMetadata::new::<AnyState>())]),
             transitions: vec![],
             log_transitions: false,
-        };
-        machine.trans::<InitialState>(AlwaysTrigger, initial)
+        }
+    }
+}
+
+impl StateMachine {
+    /// Registers a state. This is only necessary for states that are not used in any transitions.
+    pub fn with_state<S: MachineState>(mut self) -> Self {
+        self.metadata_mut::<S>();
+        self
     }
 
     /// Adds a transition to the state machine. When the entity is in the state
@@ -250,19 +246,11 @@ impl StateMachine {
         self
     }
 
-    /// Get the list of transitions for the current state.
-    fn transitions_mut(&mut self) -> impl Iterator<Item = &mut Box<dyn Transition>> {
-        self.transitions
-            .iter_mut()
-            .filter(|(type_id, _)| *type_id == self.current || *type_id == TypeId::of::<AnyState>())
-            .map(|(_, transition)| transition)
-    }
-
     /// Initialize all transitions. Must be executed before `run`. This is
     /// separate because `run` is parallelizable (takes a `&World`) but this
     /// isn't (takes a `&mut World`).
     fn init_transitions(&mut self, world: &mut World) {
-        for transition in self.transitions_mut() {
+        for (_, transition) in &mut self.transitions {
             transition.init(world);
         }
     }
@@ -270,21 +258,34 @@ impl StateMachine {
     /// Runs all transitions until one is actually taken. If one is taken, logs
     /// the transition and runs `on_enter/on_exit` triggers.
     fn run(&mut self, world: &World, entity: Entity, commands: &mut Commands) {
+        let mut states = self.states.keys();
+        let current = states.find(|&&state| world.entity(entity).contains_type_id(state));
+
+        let Some(&current) = current else {
+            panic!("Entity {entity:?} is in no state");
+        };
+
+        let from = &self.states[&current];
+        if let Some(&other) = states.find(|&&state| world.entity(entity).contains_type_id(state)) {
+            let state = &from.name;
+            let other = &self.states[&other].name;
+            panic!("{entity:?} is in multiple states: {state} and {other}");
+        }
+
         let Some((insert, next_state)) = self
             .transitions
             .par_splat_map_mut(ComputeTaskPool::get(), None, |transitions| {
                 transitions
                     .iter_mut()
                     .filter(|(type_id, _)| {
-                        *type_id == self.current || *type_id == TypeId::of::<AnyState>()
+                        *type_id == current || *type_id == TypeId::of::<AnyState>()
                     })
                     .find_map(|(_, transition)| transition.run(world, entity))
             })
             .into_iter()
             .find_map(|x| x) else { return };
-
-        let from = &self.states[&self.current];
         let to = &self.states[&next_state];
+
         for event in from.on_exit.iter() {
             event.trigger(entity, commands);
         }
@@ -297,14 +298,12 @@ impl StateMachine {
         if self.log_transitions {
             info!("{entity:?} transitioned from {} to {}", from.name, to.name);
         }
-        self.current = next_state;
     }
 
     /// When running the transition system, we replace all StateMachines in the
     /// world with their stub.
     fn stub(&self) -> Self {
         Self {
-            current: self.current,
             states: default(),
             log_transitions: false,
             transitions: default(),
@@ -386,13 +385,13 @@ mod tests {
     fn test_sets_initial_state() {
         let mut app = App::new();
         app.add_system(transition);
-        let machine = StateMachine::new(StateOne);
-        let entity = app.world.spawn(machine).id();
+        let machine = StateMachine::default().with_state::<StateOne>();
+        let entity = app.world.spawn((machine, StateOne)).id();
         app.update();
         // should have moved to state two
         assert!(
             app.world.get::<StateOne>(entity).is_some(),
-            "StateMachine should insert the initial component"
+            "StateMachine should have the initial component"
         );
     }
 
@@ -401,12 +400,11 @@ mod tests {
         let mut app = App::new();
         app.add_system(transition);
 
-        let machine = StateMachine::new(StateOne)
+        let machine = StateMachine::default()
             .trans::<StateOne>(AlwaysTrigger, StateTwo)
             .trans::<StateTwo>(ResourcePresent, StateThree);
-        let entity = app.world.spawn(machine).id();
+        let entity = app.world.spawn((machine, StateOne)).id();
 
-        app.update();
         assert!(app.world.get::<StateOne>(entity).is_some());
 
         app.update();
@@ -433,7 +431,10 @@ mod tests {
 
         let entity = app
             .world
-            .spawn(StateMachine::new(StateOne).trans::<StateOne>(AlwaysTrigger, StateOne))
+            .spawn((
+                StateMachine::default().trans::<StateOne>(AlwaysTrigger, StateOne),
+                StateOne,
+            ))
             .id();
         app.update();
         // the sort of bug this is trying to catch: if you insert the new state

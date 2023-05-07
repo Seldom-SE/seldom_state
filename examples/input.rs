@@ -43,7 +43,7 @@ fn init(mut commands: Commands, asset_server: Res<AssetServer>) {
         // This state machine achieves a very rigid movement system. Consider a state machine
         // for whatever parts of your player controller that involve discrete states.
         // Like the movement in Castlevania and Celeste, and the attacks in a fighting game.
-        StateMachine::new(Grounded::Idle)
+        StateMachine::default()
             // Whenever the player presses jump, jump
             .trans::<Grounded>(
                 JustPressedTrigger(Action::Jump),
@@ -62,6 +62,7 @@ fn init(mut commands: Commands, asset_server: Res<AssetServer>) {
                 })
             })
             .set_trans_logging(true),
+        Grouded::Idle,
     ));
 }
 

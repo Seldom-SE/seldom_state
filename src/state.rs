@@ -11,9 +11,9 @@ use crate::prelude::*;
 ///
 /// If you are concerned with performance, consider having your states use sparse set storage,
 /// since they may be added to and removed from entities.
-pub trait MachineState: Bundle + Clone {}
+pub trait MachineState: Clone + Component {}
 
-impl<T: Bundle + Clone> MachineState for T {}
+impl<T: Clone + Component> MachineState for T {}
 
 /// State that represents any state. Transitions from [`AnyState`] may transition
 /// from any other state.
@@ -99,13 +99,12 @@ mod tests {
         let mut app = App::new();
         app.add_system(transition);
 
-        let machine = StateMachine::new(StateOne)
+        let machine = StateMachine::default()
             .trans::<StateOne>(AlwaysTrigger, StateTwo)
             .on_exit::<StateOne>(|commands| commands.commands().insert_resource(SomeResource))
             .on_enter::<StateTwo>(|commands| commands.commands().insert_resource(AnotherResource));
 
-        let entity = app.world.spawn(machine).id();
-        app.update();
+        let entity = app.world.spawn((machine, StateOne)).id();
         assert!(app.world.get::<StateOne>(entity).is_some());
 
         app.update();
