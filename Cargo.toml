@@ -14,7 +14,6 @@ repository = "https://github.com/Seldom-SE/seldom_state"
 leafwing_input = [ "dep:leafwing-input-manager" ]
 
 [dependencies]
-as-dyn-trait = "0.2"
 bevy = { version = "0.10", default-features = false }
 either = "1"
 leafwing-input-manager = { version = "0.9", default-features = false, optional = true }
