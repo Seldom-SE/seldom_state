@@ -23,32 +23,31 @@ pub(crate) fn trigger_plugin(app: &mut App) {
     .add_system(remove_done_markers.in_set(StateSet::RemoveDoneMarkers));
 }
 
-/// Wrapper for [`core::convert::Infallible`]. Use for [`Trigger::Err`] if the trigger
-/// is infallible.
+/// Wrapper for [`core::convert::Infallible`]. Use for [`Trigger::Err`] if the trigger is
+/// infallible.
 #[derive(Debug, Deref, DerefMut)]
 pub struct Never {
     never: Infallible,
 }
 
-/// Types that implement this may be used in [`StateMachine`]s to transition from one state
-/// to another. [`TriggerPlugin`] must be added for each trigger. Look at an example
-/// for implementing this trait, since it can be tricky.
+/// Types that implement this may be used in [`StateMachine`]s to transition from one state to
+/// another. Look at an example for implementing this trait, since it can be tricky.
 pub trait Trigger: 'static + Send + Sized + Sync {
-    /// System parameter provided to [`Trigger::trigger`]. Must not access [`StateMachine`].
+    /// System parameter provided to [`Trigger::trigger`]
     type Param<'w, 's>: ReadOnlySystemParam;
-    /// When the trigger occurs, this data is returned from `trigger`, and passed
-    /// to every transition builder on this trigger. If there's no relevant information to pass,
-    /// just use `()`. If there's also no relevant information to pass to [`Trigger::Err`],
-    /// implement [`BoolTrigger`] instead.
+    /// When the trigger occurs, this data is returned from `trigger`, and passed to every
+    /// transition builder on this trigger. If there's no relevant information to pass, just use
+    /// `()`. If there's also no relevant information to pass to [`Trigger::Err`], implement
+    /// [`BoolTrigger`] instead.
     type Ok;
     /// When the trigger does not occur, this data is returned from `trigger`. In this case,
-    /// [`NotTrigger<Self>`] passes it to every transition builder on this trigger.
-    /// If there's no relevant information to pass, implement [`OptionTrigger`] instead.
-    /// If this trigger is infallible, use [`Never`].
+    /// [`NotTrigger<Self>`] passes it to every transition builder on this trigger. If there's no
+    /// relevant information to pass, implement [`OptionTrigger`] instead. If this trigger is
+    /// infallible, use [`Never`].
     type Err;
 
-    /// Called for every entity that may transition to a state on this trigger. Return `Ok`
-    /// if it should transition, and `Err` if it should not. In most cases, you may use
+    /// Called for every entity that may transition to a state on this trigger. Return `Ok` if it
+    /// should transition, and `Err` if it should not. In most cases, you may use
     /// `&Self::Param<'_, '_>` as `param`'s type.
     fn trigger(
         &self,
@@ -77,18 +76,18 @@ pub trait Trigger: 'static + Send + Sized + Sync {
     }
 }
 
-/// Automatically implements [`Trigger`]. Implement this instead of there is no relevant
-/// information to pass for [`Trigger::Err`].
+/// Automatically implements [`Trigger`]. Implement this instead if there is no relevant information
+/// to pass for [`Trigger::Err`].
 pub trait OptionTrigger: 'static + Send + Sync {
-    /// System parameter provided to [`OptionTrigger::trigger`]. Must not access [`StateMachine`].
+    /// System parameter provided to [`OptionTrigger::trigger`]
     type Param<'w, 's>: ReadOnlySystemParam;
-    /// When the trigger occurs, this data is returned from `trigger`, and passed
-    /// to every transition builder on this trigger. If there's no relevant information to pass,
-    /// implement [`BoolTrigger`] instead.
+    /// When the trigger occurs, this data is returned from `trigger`, and passed to every
+    /// transition builder on this trigger. If there's no relevant information to pass, implement
+    /// [`BoolTrigger`] instead.
     type Some;
 
-    /// Called for every entity that may transition to a state on this trigger. Return `Some`
-    /// if it should transition, and `None` if it should not. In most cases, you may use
+    /// Called for every entity that may transition to a state on this trigger. Return `Some` if it
+    /// should transition, and `None` if it should not. In most cases, you may use
     /// `&Self::Param<'_, '_>` as `param`'s type.
     fn trigger(
         &self,
@@ -111,14 +110,14 @@ impl<T: OptionTrigger> Trigger for T {
     }
 }
 
-/// Automatically implements [`Trigger`]. Implement this instead of there is no relevant
-/// information to pass for [`Trigger::Ok`] and [`Trigger::Err`].
+/// Automatically implements [`Trigger`]. Implement this instead if there is no relevant information
+/// to pass for [`Trigger::Ok`] and [`Trigger::Err`].
 pub trait BoolTrigger: 'static + Send + Sync {
-    /// System parameter provided to [`BoolTrigger::trigger`]. Must not access [`StateMachine`].
+    /// System parameter provided to [`BoolTrigger::trigger`]
     type Param<'w, 's>: ReadOnlySystemParam;
 
-    /// Called for every entity that may transition to a state on this trigger. Return `true`
-    /// if it should transition, and `false` if it should not. In most cases, you may use
+    /// Called for every entity that may transition to a state on this trigger. Return `true` if it
+    /// should transition, and `false` if it should not. In most cases, you may use
     /// `&Self::Param<'_, '_>` as `param`'s type.
     fn trigger(
         &self,
@@ -154,7 +153,7 @@ impl Trigger for AlwaysTrigger {
     }
 }
 
-/// Trigger that negates the contained trigger.
+/// Trigger that negates the contained trigger
 #[derive(Debug, Deref, DerefMut)]
 pub struct NotTrigger<T: Trigger>(pub T);
 
@@ -223,8 +222,8 @@ impl<T: Trigger, U: Trigger> Trigger for OrTrigger<T, U> {
     }
 }
 
-/// Marker component that represents that the current state has completed. Removed
-/// from every entity each frame after checking triggers. To be used with [`DoneTrigger`].
+/// Marker component that represents that the current state has completed. Removed from every entity
+/// each frame after checking triggers. To be used with [`DoneTrigger`].
 #[derive(Component, Debug, Eq, PartialEq)]
 #[component(storage = "SparseSet")]
 pub enum Done {
@@ -234,8 +233,7 @@ pub enum Done {
     Failure,
 }
 
-/// Trigger that transitions if the entity has the [`Done`] component
-/// with the associated variant.
+/// Trigger that transitions if the entity has the [`Done`] component with the associated variant
 #[derive(Debug)]
 pub enum DoneTrigger {
     /// Success variant

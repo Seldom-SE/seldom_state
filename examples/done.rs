@@ -1,6 +1,5 @@
-// In this game, you control the player by clicking where they should go
-// This is an example of how to use `DoneTrigger` and the `Done` component
-// `chase.rs` is a better example to start with
+// In this game, you control the player by clicking where they should go. This is an example of how
+// to use `DoneTrigger` and the `Done` component. `chase.rs` is a better example to start with.
 
 use bevy::prelude::*;
 use seldom_state::prelude::*;
@@ -33,8 +32,8 @@ fn init(mut commands: Commands, asset_server: Res<AssetServer>) {
                     target: pos,
                 })
             })
-            // `DoneTrigger` triggers when the `Done` component is added to the entity
-            // When they're done going to the selection, idle
+            // `DoneTrigger` triggers when the `Done` component is added to the entity. When they're
+            // done going to the selection, idle.
             .trans::<GoToSelection>(DoneTrigger::Success, Idle)
             .set_trans_logging(true),
         Idle,
@@ -79,9 +78,8 @@ fn go_to_target(
 
         if movement.length() > delta.length() {
             transform.translation = target.extend(transform.translation.z);
-            // The player has reached the target!
-            // Add the `Done` component to the player, causing `DoneTrigger` to trigger
-            // It will be automatically removed later this frame
+            // The player has reached the target! Add the `Done` component to the player, causing
+            // `DoneTrigger` to trigger. It will be automatically removed later this frame.
             commands.entity(entity).insert(Done::Success);
             info!("Done!")
         } else {
@@ -90,8 +88,8 @@ fn go_to_target(
     }
 }
 
-// The code after this comment is not related to `seldom_state`. Just player stuff
-// and finding the cursor's world position.
+// The code after this comment is not related to `seldom_state`. Just player stuff and finding the
+// cursor's world position.
 
 #[derive(Component)]
 struct Player;

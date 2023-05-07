@@ -40,14 +40,14 @@ mod sealed {
 
 /// A state that an entity may be in.
 ///
-/// If you are concerned with performance, consider having your states use sparse set storage,
-/// since they may be added to and removed from entities.
+/// If you are concerned with performance, consider having your states use sparse set storage if
+/// transitions are very frequent.
 pub trait MachineState: 'static + Clone + Send + Sync + MachineStateSealed {}
 
 impl<T: Clone + Component> MachineState for T {}
 
-/// State that represents any state. Transitions from [`AnyState`] may transition
-/// from any other state.
+/// State that represents any state. Transitions from [`AnyState`] may transition from any other
+/// state.
 #[derive(Clone, Debug)]
 pub struct AnyState(pub(crate) ());
 

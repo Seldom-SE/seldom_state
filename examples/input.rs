@@ -1,5 +1,5 @@
-// In this game, you can move with the left and right arrow keys, and jump with space
-// `leafwing-input-manager` handles the input
+// In this game, you can move with the left and right arrow keys, and jump with space.
+// `leafwing-input-manager` handles the input.
 
 use bevy::prelude::*;
 use leafwing_input_manager::{axislike::VirtualAxis, prelude::*};
@@ -40,9 +40,9 @@ fn init(mut commands: Commands, asset_server: Res<AssetServer>) {
                 .build(),
             ..default()
         },
-        // This state machine achieves a very rigid movement system. Consider a state machine
-        // for whatever parts of your player controller that involve discrete states.
-        // Like the movement in Castlevania and Celeste, and the attacks in a fighting game.
+        // This state machine achieves a very rigid movement system. Consider a state machine for
+        // whatever parts of your player controller that involve discrete states. Like the movement
+        // in Castlevania and Celeste, and the attacks in a fighting game.
         StateMachine::default()
             // Whenever the player presses jump, jump
             .trans::<Grounded>(
@@ -63,8 +63,7 @@ fn init(mut commands: Commands, asset_server: Res<AssetServer>) {
                         _ => Grounded::Idle,
                     })
                 },
-            )
-            .set_trans_logging(true),
+            ),
         Grounded::Idle,
     ));
 }

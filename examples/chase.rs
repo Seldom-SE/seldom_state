@@ -1,5 +1,5 @@
-// In this game, the player moves around in 2D with the arrow keys, but if they get too close
-// to the enemy, the enemy moves towards them, until the player moves back out of range
+// In this game, the player moves around in 2D with the arrow keys, but if they get too close to the
+// enemy, the enemy moves towards them, until the player moves back out of range
 
 use bevy::prelude::*;
 use seldom_state::prelude::*;
@@ -43,10 +43,10 @@ fn init(mut commands: Commands, asset_server: Res<AssetServer>) {
             texture: asset_server.load("enemy.png"),
             ..default()
         },
-        // This state machine handles the enemy's transitions
+        // This state machine handles the enemy's transitions. Transitions defined earlier have
+        // priority, but triggers after the first accepted one may still be checked.
         StateMachine::default()
-            // Add a transition
-            // When they're in `Idle` state, and the `near_player` trigger occurs,
+            // Add a transition. When they're in `Idle` state, and the `near_player` trigger occurs,
             // switch to that instance of the `Follow` state
             .trans::<Idle>(
                 near_player,
@@ -56,11 +56,9 @@ fn init(mut commands: Commands, asset_server: Res<AssetServer>) {
                     speed: 100.,
                 },
             )
-            // Add a second transition
-            // When they're in the `Follow` state, and the `near_player` trigger
-            // does not occur, switch to the `Idle` state
-            // `.not()` is a combinator that negates the trigger `.and(other)` and `.or(other)`
-            // also exist
+            // Add a second transition. When they're in the `Follow` state, and the `near_player`
+            // trigger does not occur, switch to the `Idle` state. `.not()` is a combinator that
+            // negates the trigger. `.and(other)` and `.or(other)` also exist.
             .trans::<Follow>(near_player.not(), Idle)
             // Enable transition logging
             .set_trans_logging(true),
@@ -69,12 +67,10 @@ fn init(mut commands: Commands, asset_server: Res<AssetServer>) {
     ));
 }
 
-// Let's define our trigger!
-// Triggers must implement `Reflect`
-// `Clone` and `Copy` are not necessary, but it's nicer to do so here
+// Let's define our trigger!. `Clone` and `Copy` are not necessary, but it's nicer to do so here.
 
 // This trigger checks if the entity is within the the given range of the target
-#[derive(Clone, Copy, Reflect)]
+#[derive(Clone, Copy)]
 struct Near {
     target: Entity,
     range: f32,
@@ -82,20 +78,18 @@ struct Near {
 
 // Also see `OptionTrigger` and `BoolTrigger`
 impl Trigger for Near {
-    // Put the parameters that your trigger needs here
-    // Triggers are immutable; you may not access system params mutably
-    // Do not query for the `StateMachine` component in this type. This, unfortunately, will panic.
-    // `Time` is included here to demonstrate how to get multiple system params
+    // Put the parameters that your trigger needs here. `Param` is read-only; you may not access
+    // system params that write to the `World`. `Time` is included here to demonstrate how to get
+    // multiple system params.
     type Param<'w, 's> = (Query<'w, 's, &'static Transform>, Res<'w, Time>);
-    // These types are used by transition builders, for dataflow from triggers to transitions
-    // See `StateMachine::trans_builder`
+    // These types are used by transition builders, for dataflow from triggers to transitions. See
+    // `StateMachine::trans_builder`
     type Ok = f32;
     type Err = f32;
 
-    // This function checks if the given entity should trigger
-    // It runs once per frame for each entity that is in a state that can transition
-    // on this trigger
-    // Return `Ok` to trigger and `Err` to not trigger
+    // This function checks if the given entity should trigger. It runs once per potential
+    // transition for each entity that is in a state that can transition on this trigger. return
+    // `Ok` to trigger or `Err` to not trigger.
     fn trigger(
         &self,
         entity: Entity,
@@ -109,27 +103,25 @@ impl Trigger for Near {
             .truncate()
             .distance(transforms.get(entity).unwrap().translation.truncate());
 
-        // Check whether the target is within range
-        // If it is, return `Ok` to trigger!
-        (distance <= self.range).then_some(distance).ok_or(distance)
+        // Check whether the target is within range. If it is, return `Ok` to trigger!
+        match distance <= self.range {
+            true => Ok(distance),
+            false => Err(distance),
+        }
     }
 }
 
-// Now let's define our states!
-// States must implement `Bundle`, `Clone`, and `Reflect`
-// `MachineState` is implemented automatically for valid states
-// If necessary, you may use `#[reflect(ignore)]` on fields that cannot be reflected
-// Consider annotating your states with `#[component(storage = "SparseSet")]`
-// for better insert/remove performance
-// Don't insert/remove states manually! This will confuse the `StateMachine`.
-// You may mutate states, though.
+// Now let's define our states! States must implement `Component` and `Clone`. `MachineState` is
+// implemented automatically for valid states. Feel free to mutate/insert/remove states manually,
+// but don't put it in multiple or zero states, else it will panic. Manually inserted/removed
+// states will not trigger `on_enter`/`on_exit` events registered to the `StateMachine`.
 
-// Entities in the `Idle` state should do nothing
+// Entities in the `Idle` state do nothing
 #[derive(Clone, Component, Reflect)]
 #[component(storage = "SparseSet")]
 struct Idle;
 
-// Entities in the `Follow` state should move towards the given entity at the given speed
+// Entities in the `Follow` state move toward the given entity at the given speed
 #[derive(Clone, Component, Reflect)]
 #[component(storage = "SparseSet")]
 struct Follow {

@@ -1,5 +1,5 @@
-//! Component-based state machine plugin for Bevy. Useful for AI, player state,
-//! and other entities that occupy different states.
+//! Component-based state machine plugin for Bevy. Useful for AI, player state, and other entities
+//! that occupy different states.
 
 #![warn(missing_docs)]
 
@@ -12,7 +12,7 @@ use machine::machine_plugin;
 use prelude::*;
 use trigger::trigger_plugin;
 
-/// Add to your app to use this crate.
+/// Add to your app to use this crate
 #[derive(Debug, Default)]
 pub struct StateMachinePlugin;
 
@@ -22,8 +22,8 @@ impl Plugin for StateMachinePlugin {
     }
 }
 
-/// Function called by [`StateMachinePlugin`]. You may instead call it directly
-/// or use `seldom_fn_plugin`, which is another crate I maintain.
+/// Function called by [`StateMachinePlugin`]. You may instead call it directly or use
+/// `seldom_fn_plugin`, which is another crate I maintain.
 pub fn state_machine_plugin(app: &mut App) {
     app.fn_plugin(machine_plugin).fn_plugin(trigger_plugin);
 }

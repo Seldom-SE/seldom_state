@@ -6,8 +6,7 @@ use leafwing_input_manager::{
 
 use crate::prelude::*;
 
-/// Trigger that transitions if the given [`Actionlike`]'s value is within the given bounds.
-/// You must add an [`InputTriggerPlugin<Actionlike>`] with your [`Actionlike`] type.
+/// Trigger that transitions if the given [`Actionlike`]'s value is within the given bounds
 #[derive(Debug)]
 pub struct ValueTrigger<A: Actionlike> {
     /// The action
@@ -69,8 +68,7 @@ impl<A: Actionlike> ValueTrigger<A> {
     }
 }
 
-/// Trigger that transitions if the given [`Actionlike`]'s value is within the given bounds.
-/// You must add an [`InputTriggerPlugin<Actionlike>`] with your [`Actionlike`] type.
+/// Trigger that transitions if the given [`Actionlike`]'s value is within the given bounds
 #[derive(Debug)]
 pub struct ClampedValueTrigger<A: Actionlike> {
     /// The action
@@ -133,7 +131,7 @@ impl<A: Actionlike> ClampedValueTrigger<A> {
 }
 
 /// Trigger that transitions if the given [`Actionlike`]'s [`DualAxisData`] is within the given
-/// bounds. You must add an [`InputTriggerPlugin<Actionlike>`] with your [`Actionlike`] type.
+/// bounds
 #[derive(Debug)]
 pub struct AxisPairTrigger<A: Actionlike> {
     /// The action
@@ -248,7 +246,7 @@ impl<A: Actionlike> AxisPairTrigger<A> {
 }
 
 /// Trigger that transitions if the given [`Actionlike`]'s [`DualAxisData`] is within the given
-/// bounds. You must add an [`InputTriggerPlugin<Actionlike>`] with your [`Actionlike`] type.
+/// bounds
 #[derive(Debug)]
 pub struct ClampedAxisPairTrigger<A: Actionlike> {
     /// The action
@@ -362,8 +360,7 @@ impl<A: Actionlike> ClampedAxisPairTrigger<A> {
     }
 }
 
-/// Trigger that transitions upon pressing the given [`Actionlike`]. You must add
-/// an [`InputTriggerPlugin<Actionlike>`] with your [`Actionlike`] type.
+/// Trigger that transitions upon pressing the given [`Actionlike`]
 #[derive(Debug, Deref, DerefMut)]
 pub struct JustPressedTrigger<A: Actionlike>(pub A);
 
@@ -384,8 +381,7 @@ impl<A: Actionlike> BoolTrigger for JustPressedTrigger<A> {
     }
 }
 
-/// Trigger that transitions while pressing the given [`Actionlike`]. You must add
-/// an [`InputTriggerPlugin<Actionlike>`] with your [`Actionlike`] type.
+/// Trigger that transitions while pressing the given [`Actionlike`]
 #[derive(Debug, Deref, DerefMut)]
 pub struct PressedTrigger<A: Actionlike>(pub A);
 
@@ -406,8 +402,7 @@ impl<A: Actionlike> BoolTrigger for PressedTrigger<A> {
     }
 }
 
-/// Trigger that transitions upon releasing the given [`Actionlike`]. You must add
-/// an [`InputTriggerPlugin<Actionlike>`] with your [`Actionlike`] type.
+/// Trigger that transitions upon releasing the given [`Actionlike`]
 #[derive(Debug, Deref, DerefMut)]
 pub struct JustReleasedTrigger<A: Actionlike>(pub A);
 
@@ -429,8 +424,7 @@ impl<A: Actionlike> BoolTrigger for JustReleasedTrigger<A> {
     }
 }
 
-/// Trigger that transitions while the given [`Actionlike`] is released. You must add
-/// an [`InputTriggerPlugin<Actionlike>`] with your [`Actionlike`] type.
+/// Trigger that transitions while the given [`Actionlike`] is released
 #[derive(Debug, Deref, DerefMut)]
 pub struct ReleasedTrigger<A: Actionlike>(pub A);
 
@@ -451,8 +445,7 @@ impl<A: Actionlike> BoolTrigger for ReleasedTrigger<A> {
     }
 }
 
-/// Trigger that always transitions, providing the given [`Actionlike`]'s [`ActionData`].
-/// You must add an [`InputTriggerPlugin<Actionlike>`] with your [`Actionlike`] type.
+/// Trigger that always transitions, providing the given [`Actionlike`]'s [`ActionData`]
 #[derive(Debug, Deref, DerefMut)]
 pub struct ActionDataTrigger<A: Actionlike>(pub A);
 
