@@ -63,11 +63,10 @@ integration
 - [X] Transitions that can transition from any state
 - [X] Automatically insert bundle on transition
 - [ ] Built-in timer trigger (I might implement this, and wouldn't mind it)
-- [ ] More flexible, composable triggers, such as `And<A: Trigger, B: Trigger>(A, B)` (I might
+- [X] More flexible, composable triggers, such as `And<A: Trigger, B: Trigger>(A, B)` (I might
 implement this, and definitely want it)
-- [ ] `EventTrigger` that listens for events, possibly with additional logic (I might implement
+- [X] `EventTrigger` that listens for events, possibly with additional logic (I might implement
 this, and definitely want it)
-- [ ] Multiple state machines on an entity (I might implement this, and probably want it)
 - [X] Replace `insert_on_enter` and `remove_on_exit` with `on_enter` and `on_exit` which each take
 an `impl Fn(&mut EntityCommands)`
 
