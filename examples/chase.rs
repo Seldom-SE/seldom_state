@@ -59,8 +59,9 @@ fn init(mut commands: Commands, asset_server: Res<AssetServer>) {
             // Add a second transition
             // When they're in the `Follow` state, and the `near_player` trigger
             // does not occur, switch to the `Idle` state
-            // `NotTrigger` is a built-in trigger that negates the given trigger
-            .trans::<Follow>(NotTrigger(near_player), Idle)
+            // `.not()` is a combinator that negates the trigger `.and(other)` and `.or(other)`
+            // also exist
+            .trans::<Follow>(near_player.not(), Idle)
             // Enable transition logging
             .set_trans_logging(true),
         // The initial state is `Idle`

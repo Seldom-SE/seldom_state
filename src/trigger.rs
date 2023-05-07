@@ -1,6 +1,7 @@
 #[cfg(feature = "leafwing_input")]
 mod input;
 
+use either::Either;
 #[cfg(feature = "leafwing_input")]
 pub use input::{
     ActionDataTrigger, AxisPairTrigger, ClampedAxisPairTrigger, ClampedValueTrigger,
@@ -32,7 +33,7 @@ pub struct Never {
 /// Types that implement this may be used in [`StateMachine`]s to transition from one state
 /// to another. [`TriggerPlugin`] must be added for each trigger. Look at an example
 /// for implementing this trait, since it can be tricky.
-pub trait Trigger: 'static + Send + Sync {
+pub trait Trigger: 'static + Send + Sized + Sync {
     /// System parameter provided to [`Trigger::trigger`]. Must not access [`StateMachine`].
     type Param<'w, 's>: ReadOnlySystemParam;
     /// When the trigger occurs, this data is returned from `trigger`, and passed
@@ -55,9 +56,24 @@ pub trait Trigger: 'static + Send + Sync {
         param: &<<Self as Trigger>::Param<'_, '_> as SystemParam>::Item<'_, '_>,
     ) -> Result<Self::Ok, Self::Err>;
 
-    /// Get the name of the type, for use in logging. You probably should not override this.
+    /// Gets the name of the type, for use in logging
     fn base_type_name(&self) -> &str {
         type_name::<Self>()
+    }
+
+    /// Negates the trigger
+    fn not(self) -> NotTrigger<Self> {
+        NotTrigger(self)
+    }
+
+    /// Combines these triggers by logical AND
+    fn and<T: Trigger>(self, other: T) -> AndTrigger<Self, T> {
+        AndTrigger(self, other)
+    }
+
+    /// Combines these triggers by logical OR
+    fn or<T: Trigger>(self, other: T) -> OrTrigger<Self, T> {
+        OrTrigger(self, other)
     }
 }
 
@@ -156,6 +172,53 @@ impl<T: Trigger> Trigger for NotTrigger<T> {
         match trigger.trigger(entity, param) {
             Ok(ok) => Err(ok),
             Err(err) => Ok(err),
+        }
+    }
+}
+
+/// Trigger that combines two triggers by logical AND
+#[derive(Debug)]
+pub struct AndTrigger<T: Trigger, U: Trigger>(pub T, pub U);
+
+impl<T: Trigger, U: Trigger> Trigger for AndTrigger<T, U> {
+    type Param<'w, 's> = (T::Param<'w, 's>, U::Param<'w, 's>);
+    type Ok = (T::Ok, U::Ok);
+    type Err = Either<T::Err, U::Err>;
+
+    fn trigger(
+        &self,
+        entity: Entity,
+        (param1, param2): &<<Self as Trigger>::Param<'_, '_> as SystemParam>::Item<'_, '_>,
+    ) -> Result<(T::Ok, U::Ok), Either<T::Err, U::Err>> {
+        let Self(trigger1, trigger2) = self;
+        Ok((
+            trigger1.trigger(entity, param1).map_err(Either::Left)?,
+            trigger2.trigger(entity, param2).map_err(Either::Right)?,
+        ))
+    }
+}
+
+/// Trigger that combines two triggers by logical OR
+#[derive(Debug)]
+pub struct OrTrigger<T: Trigger, U: Trigger>(pub T, pub U);
+
+impl<T: Trigger, U: Trigger> Trigger for OrTrigger<T, U> {
+    type Param<'w, 's> = (T::Param<'w, 's>, U::Param<'w, 's>);
+    type Ok = Either<T::Ok, U::Ok>;
+    type Err = (T::Err, U::Err);
+
+    fn trigger(
+        &self,
+        entity: Entity,
+        (param1, param2): &<<Self as Trigger>::Param<'_, '_> as SystemParam>::Item<'_, '_>,
+    ) -> Result<Either<T::Ok, U::Ok>, (T::Err, U::Err)> {
+        let Self(trigger1, trigger2) = self;
+        match trigger1.trigger(entity, param1) {
+            Ok(ok) => Ok(Either::Left(ok)),
+            Err(err1) => match trigger2.trigger(entity, param2) {
+                Ok(ok) => Ok(Either::Right(ok)),
+                Err(err2) => Err((err1, err2)),
+            },
         }
     }
 }
