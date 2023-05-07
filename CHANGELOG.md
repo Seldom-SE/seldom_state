@@ -1,6 +1,37 @@
 # Changelog
 
-## 0.5 (2022-03-12)
+## 0.6 (2023-05-07)
+
+### Added
+
+- `Component` bound to `MachineState`
+- `StateMachine::on_enter` and `StateMachine::on_exit` that accept `Fn(&mut EntityCommands)`
+- `StateMachine::command_on_enter` and `StateMachine::command_on_exit` that accept a `Command`
+- `AndTrigger` and `OrTrigger` that combine triggers with boolean logic
+- `Trigger::not`, `Trigger::and`, and `Trigger::or` combinators that construct `NotTrigger`,
+`AndTrigger`, and `OrTrigger` respectively
+- `EventTrigger<E>` that triggers upon reading the event
+- `StateMachine::set_trans_logging` for logging transitions
+- `StateMachine::with_state` to register states that are not used in any transitions
+
+### Changed
+
+- `StateMachine::new` has been replaced with `StateMachine::default`, and you must insert the
+initial state manually
+- `StateMachine::trans_builder`'s callback accepts a reference to the current state
+- `StateMachine` no longer tracks the current state, so you may add and remove states manually
+- Transitions have priority in the order they are added to the `StateMachine`
+- `Trigger::Param` is a `ReadOnlySystemParam` instead of `SystemParam`, and `Trigger::trigger`
+accepts it as an owned value, allowing them to use `EventReader`, `Local`, etc
+
+### Removed
+
+- `TriggerPlugin`, `trigger_plugin`, `TriggerInputPlugin` and `trigger_input_plugin`; `Triggers` no
+longer need to be registered
+- `StateMachine::insert_on_enter` and `StateMachine::remove_on_exit`
+- `Reflect` bound from `MachineState` and `Trigger`
+
+## 0.5 (2023-03-12)
 
 ### Changed
 
@@ -12,7 +43,7 @@
 
 - `insert_on_enter` inserting on exit instead of enter
 
-## 0.4 (2022-02-26)
+## 0.4 (2023-02-26)
 
 ### Added
 
