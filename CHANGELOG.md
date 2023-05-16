@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.6.1 (2023-05-15)
+
+### Added
+
+- `EventTrigger` re-export, making it accessible
+
 ## 0.6 (2023-05-07)
 
 ### Added
