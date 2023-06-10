@@ -1,3 +1,6 @@
+//! Triggers are checked to determine whether the machine should transition to a new state. They can
+//! be combined with the `not`, `and`, and `or` combinators. See [`Trigger`].
+
 #[cfg(feature = "leafwing_input")]
 mod input;
 

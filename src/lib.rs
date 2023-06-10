@@ -6,7 +6,7 @@
 mod machine;
 pub mod set;
 mod state;
-mod trigger;
+pub mod trigger;
 
 use machine::machine_plugin;
 use prelude::*;
