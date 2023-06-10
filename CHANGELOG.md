@@ -1,5 +1,15 @@
 # Changelog
 
+## 0.6.2 (2023-06-09)
+
+### Changed
+
+- `trigger` module is public
+
+### Fixed
+
+- Transitions sometimes failing when there are multiple entities with state machines
+
 ## 0.6.1 (2023-05-15)
 
 ### Added
