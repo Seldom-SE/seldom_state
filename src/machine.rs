@@ -284,16 +284,10 @@ impl StateMachine {
 
         let Some((insert, next_state)) = self
             .transitions
-            .par_splat_map_mut(ComputeTaskPool::get(), None, |transitions| {
-                transitions
-                    .iter_mut()
-                    .filter(|(type_id, _)| {
-                        *type_id == current || *type_id == TypeId::of::<AnyState>()
-                    })
-                    .find_map(|(_, transition)| transition.run(world, entity))
-            })
-            .into_iter()
-            .find_map(|x| x) else { return };
+            .iter_mut()
+            .filter(|(type_id, _)| *type_id == current || *type_id == TypeId::of::<AnyState>())
+            .find_map(|(_, transition)| transition.run(world, entity))
+            else { return };
         let to = &self.states[&next_state];
 
         for event in from.on_exit.iter() {
