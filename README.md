@@ -112,7 +112,9 @@ However, perhaps your states are not so independent. Maybe attacking while dashi
 in a `PowerAttack` state, or the attack cooldown doesn't count down while moving. Depending on the
 scale of the dependency, you might want to just have your state machines communicate through
 commands and observing each other's states, or you might want to combine the state machines,
-permuting relevant states into states like `DashAttack` and `JumpAttackCooldown`.
+permuting relevant states into states like `DashAttack` and `IdleAttackCooldown`.
+
+Also, consider managing one set of states through a state machine and another through systems.
 
 ### I have some other problem that's difficult to express through the `StateMachine` API
 
