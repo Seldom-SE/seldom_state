@@ -72,12 +72,55 @@ want to implement
 [a behavior tree](https://www.gamedeveloper.com/programming/behavior-trees-for-ai-how-they-work) (I
 had little luck turning existing implementations into a Bevy plugin without forking them). If you
 need a solution that operates on fuzzy logic, and do not need to define which transitions should be
-allowed, then I recommend `big-brain`. If you need fuzzy logic *and* defined transitions, you may
-want to implement a fuzzy state machine. Otherwise, this crate will likely work for you!
+allowed, then I recommend `big-brain`. If you need fuzzy logic *and* discrete transitions, you may
+want to implement a fuzzy state machine. If you need discrete transitions, but not fuzzy logic,
+consider `seldom_state`!
 
 `seldom_state` is not just an AI crate, though. So, you may want to use `big-brain` for your
 enemies' AI, and `seldom_state` to manage state for your player, and control enemies' animation, or
 something.
+
+## Design patterns
+
+`seldom_state` is rather versatile, so some problems may be solved in multiple ways. If you're lost,
+here is some advice.
+
+### I have an entity whose animations depend on behavior
+
+There are a few solutions to this. The most straightforward is to add the animations to the entity
+with `on_enter`. This works for animation systems that rigidly follow behavior, such as the player
+controller in a 2D fighter or a basic enemy controller. Of course, this is rigid, and anything that
+the animations must remember between states must be handled manually. In a platformer like Celeste
+that has multiple animations for a single state (lets assume it has states `Grounded`, `Airborne`,
+`Dashing`, and `Climbing`), you might manage some animations, like the dashing animation, through
+`on_enter`, and others, like the walk cycle, through systems. Or, you might manage all animations
+through systems. This is up to preference.
+
+On the other hand, if your animations are less constrained to behavior, consider using multiple
+state machines, as in the next section:
+
+### My entity needs to be in multiple states at once
+
+Consider a 2D platformer, where the player has a sword. The player can run and jump around, and they
+can swing the sword. So whether you're running, jumping, or dashing, you always swing the sword the
+same way, independently of movement state. In this case, you might want to have a movement state
+machine and an attack state machine. Since entities can only have one state machine, spawn another
+entity with its own state machine, and capture the original `Entity` in closures in
+`command_on_enter` and `command_on_exit`.
+
+However, perhaps your states are not so independent. Maybe attacking while dashing puts the player
+in a `PowerAttack` state, or the attack cooldown doesn't count down while moving. Depending on the
+scale of the dependency, you might want to just have your state machines communicate through
+commands and observing each other's states, or you might want to combine the state machines,
+permuting relevant states into states like `DashAttack` and `JumpAttackCooldown`.
+
+### I have some other problem that's difficult to express through the `StateMachine` API
+
+Remember that `StateMachine` is component-based, so you can solve some problems normally through
+Bevy's ECS. Instead of `on_enter::<MyState>` you can use `Added<MyState>` in a system, and you can
+even change state manually through `remove` and `insert` commands. If you do change state manually,
+callbacks like `on_enter` will not be called, and you will have to make sure that the state machine
+remains in exactly one state at a time. Else, it will panic.
 
 ## Usage
 
