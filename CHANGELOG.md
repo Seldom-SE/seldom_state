@@ -1,5 +1,12 @@
 # Changelog
 
+## 0.6.3 (2023-06-16)
+
+### Fixed
+
+- `PressedTrigger` firing only once per press
+- `AxisPairTrigger` and `ClampedAxisPairTrigger` failing to fire without rotation bounds
+
 ## 0.6.2 (2023-06-09)
 
 ### Changed
