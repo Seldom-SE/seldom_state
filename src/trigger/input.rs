@@ -177,7 +177,7 @@ impl<A: Actionlike> Trigger for AxisPairTrigger<A> {
                 (length >= self.min_length
                     && length <= self.max_length
                     && rotation
-                        .map(|rotation| match self.min_rotation <= self.max_rotation {
+                        .map(|rotation| match self.min_rotation < self.max_rotation {
                             true => rotation >= self.min_rotation && rotation <= self.max_rotation,
                             false => rotation >= self.min_rotation || rotation <= self.max_rotation,
                         })
@@ -398,7 +398,7 @@ impl<A: Actionlike> BoolTrigger for PressedTrigger<A> {
                     type_name::<A>()
                 )
             })
-            .just_pressed(action.clone())
+            .pressed(action.clone())
     }
 }
 
