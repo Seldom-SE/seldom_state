@@ -292,7 +292,7 @@ impl<A: Actionlike> Trigger for ClampedAxisPairTrigger<A> {
                 (length >= self.min_length
                     && length <= self.max_length
                     && rotation
-                        .map(|rotation| match self.min_rotation <= self.max_rotation {
+                        .map(|rotation| match self.min_rotation < self.max_rotation {
                             true => rotation >= self.min_rotation && rotation <= self.max_rotation,
                             false => rotation >= self.min_rotation || rotation <= self.max_rotation,
                         })
