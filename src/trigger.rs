@@ -19,11 +19,13 @@ use crate::{prelude::*, set::StateSet};
 
 pub(crate) fn trigger_plugin(app: &mut App) {
     app.configure_set(
-        StateSet::RemoveDoneMarkers
-            .in_base_set(CoreSet::PostUpdate)
-            .after(StateSet::Transition),
+        PostUpdate,
+        StateSet::RemoveDoneMarkers.after(StateSet::Transition),
     )
-    .add_system(remove_done_markers.in_set(StateSet::RemoveDoneMarkers));
+    .add_systems(
+        PostUpdate,
+        remove_done_markers.in_set(StateSet::RemoveDoneMarkers),
+    );
 }
 
 /// Wrapper for [`core::convert::Infallible`]. Use for [`Trigger::Err`] if the trigger is
@@ -267,9 +269,9 @@ impl DoneTrigger {
 
 /// Trigger that transitions when it receives the associated event
 #[derive(Debug, Default)]
-pub struct EventTrigger<T: Clone + Send + Sync>(PhantomData<T>);
+pub struct EventTrigger<T: Clone + Event>(PhantomData<T>);
 
-impl<T: 'static + Clone + Send + Sync> OptionTrigger for EventTrigger<T> {
+impl<T: Clone + Event> OptionTrigger for EventTrigger<T> {
     type Param<'w, 's> = EventReader<'w, 's, T>;
     type Some = T;
 

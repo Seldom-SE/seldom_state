@@ -130,7 +130,7 @@ mod tests {
     #[test]
     fn test_triggers() {
         let mut app = App::new();
-        app.add_system(transition);
+        app.add_systems(Update, transition);
 
         let machine = StateMachine::default()
             .trans::<StateOne>(AlwaysTrigger, StateTwo)

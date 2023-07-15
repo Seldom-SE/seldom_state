@@ -17,8 +17,7 @@ use crate::{
 };
 
 pub(crate) fn machine_plugin(app: &mut App) {
-    app.configure_set(StateSet::Transition.in_base_set(CoreSet::PostUpdate))
-        .add_system(transition.in_set(StateSet::Transition));
+    app.add_systems(PostUpdate, transition.in_set(StateSet::Transition));
 }
 
 /// Performs a transition. We have a trait for this so we can erase [`TransitionImpl`]'s generics.
@@ -387,7 +386,7 @@ mod tests {
     #[test]
     fn test_sets_initial_state() {
         let mut app = App::new();
-        app.add_system(transition);
+        app.add_systems(Update, transition);
         let machine = StateMachine::default().with_state::<StateOne>();
         let entity = app.world.spawn((machine, StateOne)).id();
         app.update();
@@ -401,7 +400,7 @@ mod tests {
     #[test]
     fn test_machine() {
         let mut app = App::new();
-        app.add_system(transition);
+        app.add_systems(Update, transition);
 
         let machine = StateMachine::default()
             .trans::<StateOne>(AlwaysTrigger, StateTwo)
@@ -430,7 +429,7 @@ mod tests {
     #[test]
     fn test_self_transition() {
         let mut app = App::new();
-        app.add_system(transition);
+        app.add_systems(Update, transition);
 
         let entity = app
             .world

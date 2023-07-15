@@ -6,12 +6,10 @@ use seldom_state::prelude::*;
 
 fn main() {
     App::new()
-        .add_plugins(DefaultPlugins)
-        .add_plugin(StateMachinePlugin)
+        .add_plugins((DefaultPlugins, StateMachinePlugin))
         .init_resource::<CursorPosition>()
-        .add_startup_system(init)
-        .add_system(update_cursor_position)
-        .add_system(go_to_target)
+        .add_systems(Startup, init)
+        .add_systems(Update, (update_cursor_position, go_to_target))
         .run();
 }
 
@@ -98,17 +96,13 @@ struct Player;
 struct CursorPosition(Option<Vec2>);
 
 fn update_cursor_position(
-    cameras: Query<&Transform, With<Camera2d>>,
+    cameras: Query<(&Camera, &GlobalTransform)>,
     windows: Query<&Window>,
     mut position: ResMut<CursorPosition>,
 ) {
-    let window = windows.single();
-    **position = window.cursor_position().map(|cursor_position| {
-        (cameras.single().compute_matrix()
-            * (cursor_position - Vec2::new(window.width(), window.height()) / 2.)
-                .extend(0.)
-                .extend(1.))
-        .truncate()
-        .truncate()
-    });
+    let (camera, transform) = cameras.single();
+    **position = windows
+        .single()
+        .cursor_position()
+        .and_then(|cursor_position| camera.viewport_to_world_2d(transform, cursor_position));
 }

@@ -7,12 +7,13 @@ use seldom_state::prelude::*;
 
 fn main() {
     App::new()
-        .add_plugins(DefaultPlugins)
-        .add_plugin(InputManagerPlugin::<Action>::default())
-        .add_plugin(StateMachinePlugin)
-        .add_startup_system(init)
-        .add_system(walk)
-        .add_system(fall)
+        .add_plugins((
+            DefaultPlugins,
+            InputManagerPlugin::<Action>::default(),
+            StateMachinePlugin,
+        ))
+        .add_systems(Startup, init)
+        .add_systems(Update, (walk, fall))
         .run();
 }
 

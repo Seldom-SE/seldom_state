@@ -12,16 +12,17 @@ repository = "https://github.com/Seldom-SE/seldom_state"
 
 [features]
 leafwing_input = [ "dep:leafwing-input-manager" ]
+default = [ "leafwing_input" ]
 
 [dependencies]
-bevy = { version = "0.10", default-features = false }
+bevy = { version = "0.11", default-features = false }
 either = "1"
-leafwing-input-manager = { version = "0.9", default-features = false, optional = true }
-seldom_fn_plugin = { version = "0.3" }
+leafwing-input-manager = { version = "0.10", default-features = false, optional = true }
+seldom_fn_plugin = { git = "https://github.com/Seldom-SE/seldom_fn_plugin" }
 
 [dev-dependencies]
-bevy = "0.10"
-leafwing-input-manager = "0.9"
+bevy = "0.11"
+leafwing-input-manager = "0.10"
 
 [[example]]
 name = "input"
