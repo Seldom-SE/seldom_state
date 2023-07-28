@@ -20,7 +20,7 @@ State machines are created like so:
 ```Rust
 commands.spawn((
     // ... (other inserts)
-    MyInitialState::new()
+    MyInitialState::new(),
     StateMachine::default()
         .trans::<MyInitialState>(my_trigger_1, my_state_2)
         .trans::<AnyState>(my_trigger_3, my_state_4)
