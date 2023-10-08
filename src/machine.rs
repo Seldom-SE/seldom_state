@@ -5,7 +5,7 @@ use std::{
 };
 
 use bevy::{
-    ecs::system::{Command, EntityCommands, SystemState},
+    ecs::{system::{Command, EntityCommands, SystemState}, component::Tick},
     tasks::{ComputeTaskPool, ParallelSliceMut},
     utils::HashMap,
 };
@@ -13,7 +13,7 @@ use bevy::{
 use crate::{
     prelude::*,
     set::StateSet,
-    state::{Insert, OnEvent},
+    state::{Insert, OnEvent}, trigger::TriggerSystemFunction,
 };
 
 pub(crate) fn machine_plugin(app: &mut App) {
@@ -32,71 +32,70 @@ trait Transition: Debug + Send + Sync + 'static {
 /// An edge in the state machine. The type parameters are the [`Trigger`] that causes this
 /// transition, the previous state the function that takes the trigger's output and builds the next
 /// state, and the next state itself.
-struct TransitionImpl<Trig, Prev, Build, Next>
+struct TransitionImpl<Ok, Err, Prev, Build, Next>
 where
-    Trig: Trigger,
     Prev: MachineState,
-    Build: 'static + Fn(&Prev, Trig::Ok) -> Option<Next> + Send + Sync,
+    Build: 'static + Fn(&Prev, Ok) -> Option<Next> + Send + Sync,
     Next: Component + MachineState,
 {
-    pub trigger: Trig,
+    pub trigger: Box<dyn ReadOnlySystem<In=Entity, Out=Result<Ok, Err>>>,
     pub builder: Build,
-    // To run this, we need a [`SystemState`]. We can't initialize that until we have a [`World`],
-    // so it starts out empty
-    system_state: Option<SystemState<Trig::Param<'static, 'static>>>,
     phantom: PhantomData<Prev>,
 }
 
-impl<Trig, Prev, Build, Next> Debug for TransitionImpl<Trig, Prev, Build, Next>
+impl<Ok, Err, Prev, Build, Next> Debug for TransitionImpl<Ok, Err, Prev, Build, Next>
 where
-    Trig: Trigger,
+    Ok: 'static,
+    Err: 'static,
     Prev: MachineState,
-    Build: Fn(&Prev, Trig::Ok) -> Option<Next> + Send + Sync,
+    Build: Fn(&Prev, Ok) -> Option<Next> + Send + Sync,
     Next: Component + MachineState,
 {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         f.debug_struct("TransitionImpl")
             .field("trigger", &self.trigger.type_id())
             .field("builder", &self.builder.type_id())
-            .field("system_state", &self.system_state.type_id())
             .field("phantom", &self.phantom)
             .finish()
     }
 }
 
-impl<Trig, Prev, Build, Next> Transition for TransitionImpl<Trig, Prev, Build, Next>
+impl<Ok, Err, Prev, Build, Next> Transition for TransitionImpl<Ok, Err, Prev, Build, Next>
 where
-    Trig: Trigger,
+    Ok: 'static,
+    Err: 'static,
     Prev: MachineState,
-    Build: Fn(&Prev, Trig::Ok) -> Option<Next> + Send + Sync,
+    Build: Fn(&Prev, Ok) -> Option<Next> + Send + Sync,
     Next: Component + MachineState,
 {
     fn init(&mut self, world: &mut World) {
-        if self.system_state.is_none() {
-            self.system_state = Some(SystemState::new(world));
+        if self.trigger.get_last_run() == Tick::new(0) {
+            self.trigger.initialize(world);
         }
     }
 
     fn run(&mut self, world: &World, entity: Entity) -> Option<(Box<dyn Insert>, TypeId)> {
-        let state = self.system_state.as_mut().unwrap();
-        let Ok(res) = self.trigger.trigger(entity, state.get(world)) else { return None };
+        let Ok(res) = self.trigger.run_readonly(entity, world) else { return None };
         (self.builder)(Prev::from_entity(entity, world), res)
             .map(|state| (Box::new(state) as Box<dyn Insert>, TypeId::of::<Next>()))
     }
 }
 
-impl<Trig, Prev, Build, Next> TransitionImpl<Trig, Prev, Build, Next>
+impl<Ok, Err, Prev, Build, Next> TransitionImpl<Ok, Err, Prev, Build, Next>
 where
-    Trig: Trigger,
+    Ok: 'static,
+    Err: 'static,
     Prev: MachineState,
-    Build: Fn(&Prev, Trig::Ok) -> Option<Next> + Send + Sync,
+    Build: Fn(&Prev, Ok) -> Option<Next> + Send + Sync,
     Next: Component + MachineState,
 {
-    pub fn new(trigger: Trig, builder: Build) -> Self {
+    pub fn new<T>(trigger: T, builder: Build) -> Self
+    where
+        T: Trigger<Ok=Ok, Err=Err>,
+    {
         Self {
-            trigger,
+            trigger: Box::new(IntoSystem::into_system(TriggerSystemFunction(trigger))),
             builder,
-            system_state: None,
             phantom: PhantomData,
         }
     }
@@ -190,7 +189,7 @@ impl StateMachine {
     ) -> Self {
         self.metadata_mut::<Prev>();
         self.metadata_mut::<Next>();
-        let transition = TransitionImpl::<_, Prev, _, _>::new(trigger, builder);
+        let transition = TransitionImpl::<_, _, Prev, _, _>::new(trigger, builder);
         self.transitions.push((
             TypeId::of::<Prev>(),
             Box::new(transition) as Box<dyn Transition>,

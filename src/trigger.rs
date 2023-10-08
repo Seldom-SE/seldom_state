@@ -13,7 +13,7 @@ pub use input::{
 
 use std::{any::type_name, convert::Infallible, fmt::Debug, marker::PhantomData};
 
-use bevy::ecs::system::{ReadOnlySystemParam, SystemParam};
+use bevy::ecs::system::{ReadOnlySystemParam, SystemParam, SystemParamItem};
 
 use crate::{prelude::*, set::StateSet};
 
@@ -33,6 +33,24 @@ pub(crate) fn trigger_plugin(app: &mut App) {
 #[derive(Debug, Deref, DerefMut)]
 pub struct Never {
     never: Infallible,
+}
+
+/// Wrapper for `Trigger`, implements `SystemParamFunction`.
+pub struct TriggerSystemFunction<Trig: Trigger>(pub Trig);
+impl<Trig: Trigger> SystemParamFunction<
+    fn(_: Entity, _: SystemParamItem<'static, 'static, Trig::Param<'static, 'static>>) -> Result<Trig::Ok, Trig::Err>
+> for TriggerSystemFunction<Trig> {
+    type In = Entity;
+    type Out = Result<Trig::Ok, Trig::Err>;
+    type Param = Trig::Param<'static, 'static>;
+    fn run(&mut self, entity: Self::In, param_value: SystemParamItem<Self::Param>) -> Self::Out {
+        self.0.trigger(entity, param_value)
+    }
+}
+impl<Trig: Trigger> From<Trig> for TriggerSystemFunction<Trig> {
+    fn from(value: Trig) -> Self {
+        Self(value)
+    }
 }
 
 /// Types that implement this may be used in [`StateMachine`]s to transition from one state to
