@@ -35,7 +35,7 @@ pub struct Never {
     never: Infallible,
 }
 
-/// Wrapper for `Trigger`, implements `SystemParamFunction`.
+/// Wrapper for [`Trigger`], implements [`SystemParamFunction`].
 pub struct TriggerSystemFunction<Trig: Trigger>(pub Trig);
 impl<Trig: Trigger> SystemParamFunction<
     fn(_: Entity, _: SystemParamItem<'static, 'static, Trig::Param<'static, 'static>>) -> Result<Trig::Ok, Trig::Err>
@@ -50,6 +50,51 @@ impl<Trig: Trigger> SystemParamFunction<
 impl<Trig: Trigger> From<Trig> for TriggerSystemFunction<Trig> {
     fn from(value: Trig) -> Self {
         Self(value)
+    }
+}
+
+/// Wrapper for [`SystemParamFunction`], implements [`Trigger`].
+pub struct SystemFunctionTrigger<F, Marker, Ok, Err>
+where
+    F: SystemParamFunction<Marker, In=Entity, Out=Result<Ok, Err>>,
+    <F as SystemParamFunction<Marker>>::Param : ReadOnlySystemParam,
+    Marker: 'static + Send + Sync,
+    Ok: 'static + Send + Sync,
+    Err: 'static + Send + Sync,
+{
+    func: F,
+    _phantom: PhantomData<Marker>,
+}
+impl<F, Marker, Ok, Err> SystemFunctionTrigger<F, Marker, Ok, Err>
+where
+    F: SystemParamFunction<Marker, In=Entity, Out=Result<Ok, Err>>,
+    <F as SystemParamFunction<Marker>>::Param : ReadOnlySystemParam,
+    Marker: 'static + Send + Sync,
+    Ok: 'static + Send + Sync,
+    Err: 'static + Send + Sync,
+{
+    /// Creates new [`SystemFunctionTrigger`]
+    pub fn new(func: F) -> Self {
+        Self { func, _phantom: PhantomData }
+    }
+}
+impl<F, Marker: 'static, Ok, Err> Trigger for SystemFunctionTrigger<F, Marker, Ok, Err>
+where
+    F: SystemParamFunction<Marker, In=Entity, Out=Result<Ok, Err>>,
+    <F as SystemParamFunction<Marker>>::Param : ReadOnlySystemParam,
+    Marker: 'static + Send + Sync,
+    Ok: 'static + Send + Sync,
+    Err: 'static + Send + Sync,
+{
+    type Ok = Ok;
+    type Err = Err;
+    type Param<'w, 's> = <F as SystemParamFunction<Marker>>::Param;
+    fn trigger(
+        &mut self,
+        entity: Entity,
+        param: <<Self as Trigger>::Param<'_, '_> as SystemParam>::Item<'_, '_>,
+    ) -> Result<Self::Ok, Self::Err> {
+        self.func.run(entity, param)
     }
 }
 
@@ -73,7 +118,7 @@ pub trait Trigger: 'static + Send + Sized + Sync {
     /// should transition, and `Err` if it should not. In most cases, you may use
     /// `&Self::Param<'_, '_>` as `param`'s type.
     fn trigger(
-        &self,
+        &mut self,
         entity: Entity,
         param: <<Self as Trigger>::Param<'_, '_> as SystemParam>::Item<'_, '_>,
     ) -> Result<Self::Ok, Self::Err>;
@@ -125,7 +170,7 @@ impl<T: OptionTrigger> Trigger for T {
     type Err = ();
 
     fn trigger(
-        &self,
+        &mut self,
         entity: Entity,
         param: <<Self as Trigger>::Param<'_, '_> as SystemParam>::Item<'_, '_>,
     ) -> Result<Self::Ok, ()> {
@@ -171,7 +216,7 @@ impl Trigger for AlwaysTrigger {
     type Ok = ();
     type Err = Never;
 
-    fn trigger(&self, _: Entity, _: ()) -> Result<(), Never> {
+    fn trigger(&mut self, _: Entity, _: ()) -> Result<(), Never> {
         Ok(())
     }
 }
@@ -186,7 +231,7 @@ impl<T: Trigger> Trigger for NotTrigger<T> {
     type Err = T::Ok;
 
     fn trigger(
-        &self,
+        &mut self,
         entity: Entity,
         param: <<Self as Trigger>::Param<'_, '_> as SystemParam>::Item<'_, '_>,
     ) -> Result<T::Err, T::Ok> {
@@ -208,7 +253,7 @@ impl<T: Trigger, U: Trigger> Trigger for AndTrigger<T, U> {
     type Err = Either<T::Err, U::Err>;
 
     fn trigger(
-        &self,
+        &mut self,
         entity: Entity,
         (param1, param2): <<Self as Trigger>::Param<'_, '_> as SystemParam>::Item<'_, '_>,
     ) -> Result<(T::Ok, U::Ok), Either<T::Err, U::Err>> {
@@ -230,7 +275,7 @@ impl<T: Trigger, U: Trigger> Trigger for OrTrigger<T, U> {
     type Err = (T::Err, U::Err);
 
     fn trigger(
-        &self,
+        &mut self,
         entity: Entity,
         (param1, param2): <<Self as Trigger>::Param<'_, '_> as SystemParam>::Item<'_, '_>,
     ) -> Result<Either<T::Ok, U::Ok>, (T::Err, U::Err)> {

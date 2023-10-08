@@ -89,7 +89,7 @@ impl Trigger for Near {
     // transition for each entity that is in a state that can transition on this trigger. return
     // `Ok` to trigger or `Err` to not trigger.
     fn trigger(
-        &self,
+        &mut self,
         entity: Entity,
         (transforms, _time): Self::Param<'_, '_>,
     ) -> Result<f32, f32> {
