@@ -7,7 +7,7 @@ use leafwing_input_manager::{
 use crate::prelude::*;
 
 /// Trigger that transitions if the given [`Actionlike`]'s value is within the given bounds
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct ValueTrigger<A: Actionlike> {
     /// The action
     pub action: A,
@@ -69,7 +69,7 @@ impl<A: Actionlike> ValueTrigger<A> {
 }
 
 /// Trigger that transitions if the given [`Actionlike`]'s value is within the given bounds
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct ClampedValueTrigger<A: Actionlike> {
     /// The action
     pub action: A,
@@ -132,7 +132,7 @@ impl<A: Actionlike> ClampedValueTrigger<A> {
 
 /// Trigger that transitions if the given [`Actionlike`]'s [`DualAxisData`] is within the given
 /// bounds
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct AxisPairTrigger<A: Actionlike> {
     /// The action
     pub action: A,
@@ -247,7 +247,7 @@ impl<A: Actionlike> AxisPairTrigger<A> {
 
 /// Trigger that transitions if the given [`Actionlike`]'s [`DualAxisData`] is within the given
 /// bounds
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct ClampedAxisPairTrigger<A: Actionlike> {
     /// The action
     pub action: A,
@@ -361,7 +361,7 @@ impl<A: Actionlike> ClampedAxisPairTrigger<A> {
 }
 
 /// Trigger that transitions upon pressing the given [`Actionlike`]
-#[derive(Debug, Deref, DerefMut)]
+#[derive(Debug, Deref, DerefMut, Clone)]
 pub struct JustPressedTrigger<A: Actionlike>(pub A);
 
 impl<A: Actionlike> BoolTrigger for JustPressedTrigger<A> {
@@ -382,7 +382,7 @@ impl<A: Actionlike> BoolTrigger for JustPressedTrigger<A> {
 }
 
 /// Trigger that transitions while pressing the given [`Actionlike`]
-#[derive(Debug, Deref, DerefMut)]
+#[derive(Debug, Deref, DerefMut, Clone)]
 pub struct PressedTrigger<A: Actionlike>(pub A);
 
 impl<A: Actionlike> BoolTrigger for PressedTrigger<A> {
@@ -403,7 +403,7 @@ impl<A: Actionlike> BoolTrigger for PressedTrigger<A> {
 }
 
 /// Trigger that transitions upon releasing the given [`Actionlike`]
-#[derive(Debug, Deref, DerefMut)]
+#[derive(Debug, Deref, DerefMut, Clone)]
 pub struct JustReleasedTrigger<A: Actionlike>(pub A);
 
 #[cfg(feature = "leafwing_input")]
@@ -425,7 +425,7 @@ impl<A: Actionlike> BoolTrigger for JustReleasedTrigger<A> {
 }
 
 /// Trigger that transitions while the given [`Actionlike`] is released
-#[derive(Debug, Deref, DerefMut)]
+#[derive(Debug, Deref, DerefMut, Clone)]
 pub struct ReleasedTrigger<A: Actionlike>(pub A);
 
 impl<A: Actionlike> BoolTrigger for ReleasedTrigger<A> {
@@ -446,7 +446,7 @@ impl<A: Actionlike> BoolTrigger for ReleasedTrigger<A> {
 }
 
 /// Trigger that always transitions, providing the given [`Actionlike`]'s [`ActionData`]
-#[derive(Debug, Deref, DerefMut)]
+#[derive(Debug, Deref, DerefMut, Clone)]
 pub struct ActionDataTrigger<A: Actionlike>(pub A);
 
 impl<A: Actionlike> Trigger for ActionDataTrigger<A> {
