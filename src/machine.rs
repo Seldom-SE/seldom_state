@@ -79,7 +79,9 @@ where
 
     fn run(&mut self, world: &World, entity: Entity) -> Option<(Box<dyn Insert>, TypeId)> {
         let state = self.system_state.as_mut().unwrap();
-        let Ok(res) = self.trigger.trigger(entity, state.get(world)) else { return None };
+        let Ok(res) = self.trigger.trigger(entity, state.get(world)) else {
+            return None;
+        };
         (self.builder)(Prev::from_entity(entity, world), res)
             .map(|state| (Box::new(state) as Box<dyn Insert>, TypeId::of::<Next>()))
     }
@@ -286,7 +288,9 @@ impl StateMachine {
             .iter_mut()
             .filter(|(type_id, _)| *type_id == current || *type_id == TypeId::of::<AnyState>())
             .find_map(|(_, transition)| transition.run(world, entity))
-            else { return };
+        else {
+            return;
+        };
         let to = &self.states[&next_state];
 
         for event in from.on_exit.iter() {

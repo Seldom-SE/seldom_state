@@ -30,7 +30,7 @@ pub(crate) fn trigger_plugin(app: &mut App) {
 
 /// Wrapper for [`core::convert::Infallible`]. Use for [`Trigger::Err`] if the trigger is
 /// infallible.
-#[derive(Debug, Deref, DerefMut)]
+#[derive(Debug, Deref, DerefMut, Clone, Copy, PartialEq, Eq)]
 pub struct Never {
     never: Infallible,
 }
@@ -145,7 +145,7 @@ impl<T: BoolTrigger> OptionTrigger for T {
 }
 
 /// Trigger that always transitions
-#[derive(Debug)]
+#[derive(Debug, Clone, Copy)]
 pub struct AlwaysTrigger;
 
 impl Trigger for AlwaysTrigger {
@@ -180,6 +180,14 @@ impl<T: Trigger> Trigger for NotTrigger<T> {
     }
 }
 
+impl<T: Trigger + Clone> Clone for NotTrigger<T> {
+    fn clone(&self) -> Self {
+        Self(self.0.clone())
+    }
+}
+
+impl<T: Trigger + Copy> Copy for NotTrigger<T> {}
+
 /// Trigger that combines two triggers by logical AND
 #[derive(Debug)]
 pub struct AndTrigger<T: Trigger, U: Trigger>(pub T, pub U);
@@ -201,6 +209,14 @@ impl<T: Trigger, U: Trigger> Trigger for AndTrigger<T, U> {
         ))
     }
 }
+
+impl<T: Trigger + Clone, U: Trigger + Clone> Clone for AndTrigger<T, U> {
+    fn clone(&self) -> Self {
+        Self(self.0.clone(), self.1.clone())
+    }
+}
+
+impl<T: Trigger + Copy, U: Trigger + Copy> Copy for AndTrigger<T, U> {}
 
 /// Trigger that combines two triggers by logical OR
 #[derive(Debug)]
@@ -227,9 +243,17 @@ impl<T: Trigger, U: Trigger> Trigger for OrTrigger<T, U> {
     }
 }
 
+impl<T: Trigger + Clone, U: Trigger + Clone> Clone for OrTrigger<T, U> {
+    fn clone(&self) -> Self {
+        Self(self.0.clone(), self.1.clone())
+    }
+}
+
+impl<T: Trigger + Copy, U: Trigger + Copy> Copy for OrTrigger<T, U> {}
+
 /// Marker component that represents that the current state has completed. Removed from every entity
 /// each frame after checking triggers. To be used with [`DoneTrigger`].
-#[derive(Component, Debug, Eq, PartialEq)]
+#[derive(Component, Debug, Eq, PartialEq, Clone, Copy)]
 #[component(storage = "SparseSet")]
 pub enum Done {
     /// Success variant
@@ -239,7 +263,7 @@ pub enum Done {
 }
 
 /// Trigger that transitions if the entity has the [`Done`] component with the associated variant
-#[derive(Debug)]
+#[derive(Debug, Clone, Copy)]
 pub enum DoneTrigger {
     /// Success variant
     Success,
@@ -268,7 +292,7 @@ impl DoneTrigger {
 }
 
 /// Trigger that transitions when it receives the associated event
-#[derive(Debug, Default)]
+#[derive(Debug, Default, Clone, Copy)]
 pub struct EventTrigger<T: Clone + Event>(PhantomData<T>);
 
 impl<T: Clone + Event> OptionTrigger for EventTrigger<T> {
