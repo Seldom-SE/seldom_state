@@ -185,6 +185,7 @@ impl<T: Trigger + Clone> Clone for NotTrigger<T> {
         Self(self.0.clone())
     }
 }
+
 impl<T: Trigger + Copy> Copy for NotTrigger<T> {}
 
 /// Trigger that combines two triggers by logical AND
@@ -214,6 +215,7 @@ impl<T: Trigger + Clone, U: Trigger + Clone> Clone for AndTrigger<T, U> {
         Self(self.0.clone(), self.1.clone())
     }
 }
+
 impl<T: Trigger + Copy, U: Trigger + Copy> Copy for AndTrigger<T, U> {}
 
 /// Trigger that combines two triggers by logical OR
@@ -246,6 +248,7 @@ impl<T: Trigger + Clone, U: Trigger + Clone> Clone for OrTrigger<T, U> {
         Self(self.0.clone(), self.1.clone())
     }
 }
+
 impl<T: Trigger + Copy, U: Trigger + Copy> Copy for OrTrigger<T, U> {}
 
 /// Marker component that represents that the current state has completed. Removed from every entity
