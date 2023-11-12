@@ -1,5 +1,21 @@
 # Changelog
 
+## 0.8 (2023-11-12)
+
+### Added
+
+- `Clone` and `Copy` impls for triggers and other types
+- `PartialEq` and `Eq` impl for `Never`
+
+### Changed
+
+- Updated `bevy` to 0.12
+- Updated `leafwing-input-manager` to 0.11
+
+### Fixed
+
+- The `leafwing_input` feature was a default feature
+
 ## 0.7 (2023-07-15)
 
 ### Changed
