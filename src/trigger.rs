@@ -18,7 +18,7 @@ use bevy::ecs::system::{ReadOnlySystemParam, SystemParam};
 use crate::{prelude::*, set::StateSet};
 
 pub(crate) fn trigger_plugin(app: &mut App) {
-    app.configure_set(
+    app.configure_sets(
         PostUpdate,
         StateSet::RemoveDoneMarkers.after(StateSet::Transition),
     )
@@ -304,7 +304,7 @@ impl<T: Clone + Event> OptionTrigger for EventTrigger<T> {
         _: Entity,
         mut events: Self::Param<'_, '_>,
     ) -> Option<<Self as OptionTrigger>::Some> {
-        events.iter().next().cloned()
+        events.read().next().cloned()
     }
 }
 
