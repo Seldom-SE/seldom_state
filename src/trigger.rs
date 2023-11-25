@@ -292,7 +292,7 @@ impl DoneTrigger {
 }
 
 /// Trigger that transitions when it receives the associated event
-#[derive(Debug, Default, Clone, Copy)]
+#[derive(Debug, Clone, Copy)]
 pub struct EventTrigger<T: Clone + Event>(PhantomData<T>);
 
 impl<T: Clone + Event> OptionTrigger for EventTrigger<T> {
@@ -305,6 +305,13 @@ impl<T: Clone + Event> OptionTrigger for EventTrigger<T> {
         mut events: Self::Param<'_, '_>,
     ) -> Option<<Self as OptionTrigger>::Some> {
         events.read().next().cloned()
+    }
+}
+
+// derive(Default) requires `T: Default`
+impl<T: Clone + Event> Default for EventTrigger<T> {
+    fn default() -> Self {
+        Self(PhantomData)
     }
 }
 
