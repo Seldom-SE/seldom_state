@@ -7,13 +7,15 @@ mod input;
 use either::Either;
 #[cfg(feature = "leafwing_input")]
 pub use input::{
-    ActionDataTrigger, AxisPairTrigger, ClampedAxisPairTrigger, ClampedValueTrigger,
-    JustPressedTrigger, JustReleasedTrigger, PressedTrigger, ReleasedTrigger, ValueTrigger,
+    action_data, axis_pair, axis_pair_length_bounds, axis_pair_max_length, axis_pair_min_length,
+    axis_pair_rotation_bounds, axis_pair_unbounded, clamped_axis_pair,
+    clamped_axis_pair_length_bounds, clamped_axis_pair_max_length, clamped_axis_pair_min_length,
+    clamped_axis_pair_rotation_bounds, clamped_axis_pair_unbounded, clamped_value,
+    clamped_value_max, clamped_value_min, clamped_value_unbounded, just_pressed, just_released,
+    pressed, value, value_max, value_min, value_unbounded,
 };
 
-use std::{any::type_name, convert::Infallible, fmt::Debug, marker::PhantomData};
-
-use bevy::ecs::system::{ReadOnlySystemParam, SystemParam};
+use std::{convert::Infallible, fmt::Debug};
 
 use crate::{prelude::*, set::StateSet};
 
@@ -35,224 +37,238 @@ pub struct Never {
     never: Infallible,
 }
 
+/// Input requested by a trigger
+pub trait TriggerIn {
+    /// Convert an `Entity` to `Self`
+    fn from_entity(entity: Entity) -> Self;
+}
+
+impl TriggerIn for () {
+    fn from_entity(_: Entity) -> Self {}
+}
+
+impl TriggerIn for Entity {
+    fn from_entity(entity: Entity) -> Self {
+        entity
+    }
+}
+
+/// Output returned from a trigger. Indicates whether the transition will occur, and may include
+/// data given to `StateMachine::trans_builder`.
+pub trait TriggerOut {
+    /// Data given to `StateMachine::trans_builder` on a success
+    type Ok;
+    /// Data given to `StataMachine::trans_builder` if this trigger fails and is negated
+    type Err;
+
+    /// Convert `Self` to a `Result`
+    fn into_result(self) -> Result<Self::Ok, Self::Err>;
+}
+
+impl TriggerOut for bool {
+    type Ok = ();
+    type Err = ();
+
+    fn into_result(self) -> Result<(), ()> {
+        if self {
+            Ok(())
+        } else {
+            Err(())
+        }
+    }
+}
+
+impl<T> TriggerOut for Option<T> {
+    type Ok = T;
+    type Err = ();
+
+    fn into_result(self) -> Result<T, ()> {
+        self.ok_or(())
+    }
+}
+
+impl<Ok, Err> TriggerOut for Result<Ok, Err> {
+    type Ok = Ok;
+    type Err = Err;
+
+    fn into_result(self) -> Self {
+        self
+    }
+}
+
+/// Automatically implemented for types that implement [`Trigger`] and certain types that implement
+/// [`IntoSystem`]. Types that implement [`IntoSystem`] don't automatically implement [`Trigger`],
+/// so if you want to accept a trigger somewhere, you can accept a generic that implements this
+/// trait instead. Otherwise, the caller will usually have to call `.into_trigger()` when providing
+/// a type that implements [`IntoSystem`].
+///
+/// The `Marker` type param is necessary to implement this trait for systems, to prevent a system
+/// from implementing the same instance of this trait multiple times, since a type may implement
+/// multiple instances of [`IntoSystem`]. It doesn't matter what type `Marker` is set to.
+pub trait IntoTrigger<Marker>: Sized {
+    /// The [`Trigger`] type that this is converted into
+    type Trigger: Trigger;
+
+    /// Convert into a [`Trigger`]
+    fn into_trigger(self) -> Self::Trigger;
+
+    /// Negates the trigger. Do not override.
+    fn not(self) -> impl Trigger {
+        NotTrigger(self.into_trigger())
+    }
+
+    /// Combines these triggers by logical AND. Do not override.
+    fn and<Marker2>(self, other: impl IntoTrigger<Marker2>) -> impl Trigger {
+        AndTrigger(self.into_trigger(), other.into_trigger())
+    }
+
+    /// Combines these triggers by logical OR. Do not override.
+    fn or<Marker2>(self, other: impl IntoTrigger<Marker2>) -> impl Trigger {
+        OrTrigger(self.into_trigger(), other.into_trigger())
+    }
+}
+
+impl<In, Out, Marker, T: IntoSystem<In, Out, Marker>> IntoTrigger<(In, Out, Marker)> for T
+where
+    In: TriggerIn,
+    Out: TriggerOut,
+    T::System: ReadOnlySystem,
+{
+    type Trigger = SystemTrigger<T::System>;
+
+    fn into_trigger(self) -> Self::Trigger {
+        SystemTrigger(IntoSystem::into_system(self))
+    }
+}
+
 /// Types that implement this may be used in [`StateMachine`]s to transition from one state to
 /// another. Look at an example for implementing this trait, since it can be tricky.
 pub trait Trigger: 'static + Send + Sized + Sync {
-    /// System parameter provided to [`Trigger::trigger`]
-    type Param<'w, 's>: ReadOnlySystemParam;
-    /// When the trigger occurs, this data is returned from `trigger`, and passed to every
-    /// transition builder on this trigger. If there's no relevant information to pass, just use
-    /// `()`. If there's also no relevant information to pass to [`Trigger::Err`], implement
-    /// [`BoolTrigger`] instead.
-    type Ok;
-    /// When the trigger does not occur, this data is returned from `trigger`. In this case,
-    /// [`NotTrigger<Self>`] passes it to every transition builder on this trigger. If there's no
-    /// relevant information to pass, implement [`OptionTrigger`] instead. If this trigger is
-    /// infallible, use [`Never`].
-    type Err;
+    /// The trigger's output. See [`TriggerOut`].
+    type Out: TriggerOut;
 
-    /// Called for every entity that may transition to a state on this trigger. Return `Ok` if it
-    /// should transition, and `Err` if it should not. In most cases, you may use
-    /// `&Self::Param<'_, '_>` as `param`'s type.
-    fn trigger(
-        &self,
-        entity: Entity,
-        param: <<Self as Trigger>::Param<'_, '_> as SystemParam>::Item<'_, '_>,
-    ) -> Result<Self::Ok, Self::Err>;
+    /// Initializes/resets this trigger. Runs every time the state machine transitions.
+    fn init(&mut self, world: &mut World);
+    /// Checks whether the state machine should transition
+    fn check(&mut self, entity: Entity, world: &World) -> Self::Out;
+}
 
-    /// Gets the name of the type, for use in logging
-    fn base_type_name(&self) -> &str {
-        type_name::<Self>()
-    }
+impl<T: Trigger> IntoTrigger<()> for T {
+    type Trigger = T;
 
-    /// Negates the trigger
-    fn not(self) -> NotTrigger<Self> {
-        NotTrigger(self)
-    }
-
-    /// Combines these triggers by logical AND
-    fn and<T: Trigger>(self, other: T) -> AndTrigger<Self, T> {
-        AndTrigger(self, other)
-    }
-
-    /// Combines these triggers by logical OR
-    fn or<T: Trigger>(self, other: T) -> OrTrigger<Self, T> {
-        OrTrigger(self, other)
+    fn into_trigger(self) -> T {
+        self
     }
 }
 
-/// Automatically implements [`Trigger`]. Implement this instead if there is no relevant information
-/// to pass for [`Trigger::Err`].
-pub trait OptionTrigger: 'static + Send + Sync {
-    /// System parameter provided to [`OptionTrigger::trigger`]
-    type Param<'w, 's>: ReadOnlySystemParam;
-    /// When the trigger occurs, this data is returned from `trigger`, and passed to every
-    /// transition builder on this trigger. If there's no relevant information to pass, implement
-    /// [`BoolTrigger`] instead.
-    type Some;
+/// The trigger form of a system. See [`IntoSystem`].
+pub struct SystemTrigger<T: ReadOnlySystem>(T);
 
-    /// Called for every entity that may transition to a state on this trigger. Return `Some` if it
-    /// should transition, and `None` if it should not. In most cases, you may use
-    /// `&Self::Param<'_, '_>` as `param`'s type.
-    fn trigger(
-        &self,
-        entity: Entity,
-        param: <<Self as OptionTrigger>::Param<'_, '_> as SystemParam>::Item<'_, '_>,
-    ) -> Option<Self::Some>;
-}
+impl<T: ReadOnlySystem> Trigger for SystemTrigger<T>
+where
+    T::In: TriggerIn,
+    T::Out: TriggerOut,
+{
+    type Out = T::Out;
 
-impl<T: OptionTrigger> Trigger for T {
-    type Param<'w, 's> = <Self as OptionTrigger>::Param<'w, 's>;
-    type Ok = <Self as OptionTrigger>::Some;
-    type Err = ();
-
-    fn trigger(
-        &self,
-        entity: Entity,
-        param: <<Self as Trigger>::Param<'_, '_> as SystemParam>::Item<'_, '_>,
-    ) -> Result<Self::Ok, ()> {
-        OptionTrigger::trigger(self, entity, param).ok_or(())
+    fn init(&mut self, world: &mut World) {
+        let Self(t) = self;
+        t.initialize(world);
     }
-}
 
-/// Automatically implements [`Trigger`]. Implement this instead if there is no relevant information
-/// to pass for [`Trigger::Ok`] and [`Trigger::Err`].
-pub trait BoolTrigger: 'static + Send + Sync {
-    /// System parameter provided to [`BoolTrigger::trigger`]
-    type Param<'w, 's>: ReadOnlySystemParam;
-
-    /// Called for every entity that may transition to a state on this trigger. Return `true` if it
-    /// should transition, and `false` if it should not. In most cases, you may use
-    /// `&Self::Param<'_, '_>` as `param`'s type.
-    fn trigger(
-        &self,
-        entity: Entity,
-        param: <<Self as BoolTrigger>::Param<'_, '_> as SystemParam>::Item<'_, '_>,
-    ) -> bool;
-}
-
-impl<T: BoolTrigger> OptionTrigger for T {
-    type Param<'w, 's> = <Self as BoolTrigger>::Param<'w, 's>;
-    type Some = ();
-
-    fn trigger(
-        &self,
-        entity: Entity,
-        param: <<Self as Trigger>::Param<'_, '_> as SystemParam>::Item<'_, '_>,
-    ) -> Option<()> {
-        BoolTrigger::trigger(self, entity, param).then_some(())
+    fn check(&mut self, entity: Entity, world: &World) -> Self::Out {
+        let Self(t) = self;
+        t.run_readonly(T::In::from_entity(entity), world)
     }
 }
 
 /// Trigger that always transitions
-#[derive(Debug, Clone, Copy)]
-pub struct AlwaysTrigger;
-
-impl Trigger for AlwaysTrigger {
-    type Param<'w, 's> = ();
-    type Ok = ();
-    type Err = Never;
-
-    fn trigger(&self, _: Entity, _: ()) -> Result<(), Never> {
-        Ok(())
-    }
+pub fn always() -> bool {
+    true
 }
 
-/// Trigger that negates the contained trigger
-#[derive(Debug, Deref, DerefMut)]
+/// Negates the given trigger
+#[derive(Debug)]
 pub struct NotTrigger<T: Trigger>(pub T);
 
 impl<T: Trigger> Trigger for NotTrigger<T> {
-    type Param<'w, 's> = T::Param<'w, 's>;
-    type Ok = T::Err;
-    type Err = T::Ok;
+    type Out = Result<<T::Out as TriggerOut>::Err, <T::Out as TriggerOut>::Ok>;
 
-    fn trigger(
-        &self,
-        entity: Entity,
-        param: <<Self as Trigger>::Param<'_, '_> as SystemParam>::Item<'_, '_>,
-    ) -> Result<T::Err, T::Ok> {
-        let Self(trigger) = self;
-        match trigger.trigger(entity, param) {
+    fn init(&mut self, world: &mut World) {
+        let Self(t) = self;
+        t.init(world);
+    }
+
+    fn check(&mut self, entity: Entity, world: &World) -> Self::Out {
+        let Self(t) = self;
+        match t.check(entity, world).into_result() {
             Ok(ok) => Err(ok),
             Err(err) => Ok(err),
         }
     }
 }
 
-impl<T: Trigger + Clone> Clone for NotTrigger<T> {
-    fn clone(&self) -> Self {
-        Self(self.0.clone())
-    }
-}
-
-impl<T: Trigger + Copy> Copy for NotTrigger<T> {}
-
-/// Trigger that combines two triggers by logical AND
+/// Combines two triggers by logical AND
 #[derive(Debug)]
 pub struct AndTrigger<T: Trigger, U: Trigger>(pub T, pub U);
 
 impl<T: Trigger, U: Trigger> Trigger for AndTrigger<T, U> {
-    type Param<'w, 's> = (T::Param<'w, 's>, U::Param<'w, 's>);
-    type Ok = (T::Ok, U::Ok);
-    type Err = Either<T::Err, U::Err>;
+    type Out = Result<
+        (<T::Out as TriggerOut>::Ok, <U::Out as TriggerOut>::Ok),
+        Either<<T::Out as TriggerOut>::Err, <U::Out as TriggerOut>::Err>,
+    >;
 
-    fn trigger(
-        &self,
-        entity: Entity,
-        (param1, param2): <<Self as Trigger>::Param<'_, '_> as SystemParam>::Item<'_, '_>,
-    ) -> Result<(T::Ok, U::Ok), Either<T::Err, U::Err>> {
-        let Self(trigger1, trigger2) = self;
+    fn init(&mut self, world: &mut World) {
+        let Self(t, u) = self;
+
+        t.init(world);
+        u.init(world);
+    }
+
+    fn check(&mut self, entity: Entity, world: &World) -> Self::Out {
+        let Self(t, u) = self;
+
         Ok((
-            trigger1.trigger(entity, param1).map_err(Either::Left)?,
-            trigger2.trigger(entity, param2).map_err(Either::Right)?,
+            t.check(entity, world).into_result().map_err(Either::Left)?,
+            u.check(entity, world)
+                .into_result()
+                .map_err(Either::Right)?,
         ))
     }
 }
 
-impl<T: Trigger + Clone, U: Trigger + Clone> Clone for AndTrigger<T, U> {
-    fn clone(&self) -> Self {
-        Self(self.0.clone(), self.1.clone())
-    }
-}
-
-impl<T: Trigger + Copy, U: Trigger + Copy> Copy for AndTrigger<T, U> {}
-
-/// Trigger that combines two triggers by logical OR
+/// Combines two triggers by logical OR
 #[derive(Debug)]
 pub struct OrTrigger<T: Trigger, U: Trigger>(pub T, pub U);
 
 impl<T: Trigger, U: Trigger> Trigger for OrTrigger<T, U> {
-    type Param<'w, 's> = (T::Param<'w, 's>, U::Param<'w, 's>);
-    type Ok = Either<T::Ok, U::Ok>;
-    type Err = (T::Err, U::Err);
+    type Out = Result<
+        Either<<T::Out as TriggerOut>::Ok, <U::Out as TriggerOut>::Ok>,
+        (<T::Out as TriggerOut>::Err, <U::Out as TriggerOut>::Err),
+    >;
 
-    fn trigger(
-        &self,
-        entity: Entity,
-        (param1, param2): <<Self as Trigger>::Param<'_, '_> as SystemParam>::Item<'_, '_>,
-    ) -> Result<Either<T::Ok, U::Ok>, (T::Err, U::Err)> {
-        let Self(trigger1, trigger2) = self;
-        match trigger1.trigger(entity, param1) {
+    fn init(&mut self, world: &mut World) {
+        let Self(t, u) = self;
+
+        t.init(world);
+        u.init(world);
+    }
+
+    fn check(&mut self, entity: Entity, world: &World) -> Self::Out {
+        let Self(t, u) = self;
+
+        match t.check(entity, world).into_result() {
             Ok(ok) => Ok(Either::Left(ok)),
-            Err(err1) => match trigger2.trigger(entity, param2) {
+            Err(err_1) => match u.check(entity, world).into_result() {
                 Ok(ok) => Ok(Either::Right(ok)),
-                Err(err2) => Err((err1, err2)),
+                Err(err_2) => Err((err_1, err_2)),
             },
         }
     }
 }
 
-impl<T: Trigger + Clone, U: Trigger + Clone> Clone for OrTrigger<T, U> {
-    fn clone(&self) -> Self {
-        Self(self.0.clone(), self.1.clone())
-    }
-}
-
-impl<T: Trigger + Copy, U: Trigger + Copy> Copy for OrTrigger<T, U> {}
-
 /// Marker component that represents that the current state has completed. Removed from every entity
-/// each frame after checking triggers. To be used with [`DoneTrigger`].
+/// each frame after checking triggers. To be used with [`done`].
 #[derive(Component, Debug, Eq, PartialEq, Clone, Copy)]
 #[component(storage = "SparseSet")]
 pub enum Done {
@@ -262,50 +278,21 @@ pub enum Done {
     Failure,
 }
 
-/// Trigger that transitions if the entity has the [`Done`] component with the associated variant
-#[derive(Debug, Clone, Copy)]
-pub enum DoneTrigger {
-    /// Success variant
-    Success,
-    /// Failure variant
-    Failure,
-}
-
-impl BoolTrigger for DoneTrigger {
-    type Param<'w, 's> = Query<'w, 's, &'static Done>;
-
-    fn trigger(&self, entity: Entity, param: Self::Param<'_, '_>) -> bool {
-        param
+/// Trigger that transitions if the entity has the [`Done`] component. Provide `Some(Done::Variant)`
+/// to transition upon that particular variant, or `None` to transition upon either.
+pub fn done(expected: Option<Done>) -> impl Trigger<Out = bool> {
+    (move |In(entity): In<Entity>, dones: Query<&Done>| {
+        dones
             .get(entity)
-            .map(|done| self.as_done() == *done)
+            .map(|&done| expected.is_none() || Some(done) == expected)
             .unwrap_or(false)
-    }
-}
-
-impl DoneTrigger {
-    fn as_done(&self) -> Done {
-        match self {
-            Self::Success => Done::Success,
-            Self::Failure => Done::Failure,
-        }
-    }
+    })
+    .into_trigger()
 }
 
 /// Trigger that transitions when it receives the associated event
-#[derive(Debug, Default, Clone, Copy)]
-pub struct EventTrigger<T: Clone + Event>(PhantomData<T>);
-
-impl<T: Clone + Event> OptionTrigger for EventTrigger<T> {
-    type Param<'w, 's> = EventReader<'w, 's, T>;
-    type Some = T;
-
-    fn trigger(
-        &self,
-        _: Entity,
-        mut events: Self::Param<'_, '_>,
-    ) -> Option<<Self as OptionTrigger>::Some> {
-        events.read().next().cloned()
-    }
+pub fn on_event<T: Clone + Event>(mut reader: EventReader<T>) -> Option<T> {
+    reader.read().last().cloned()
 }
 
 pub(crate) fn remove_done_markers(mut commands: Commands, dones: Query<Entity, With<Done>>) {

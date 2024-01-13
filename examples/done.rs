@@ -24,33 +24,25 @@ fn init(mut commands: Commands, asset_server: Res<AssetServer>) {
         Player,
         StateMachine::default()
             // When the player clicks, go there
-            .trans_builder(Click, |_: &AnyState, pos| {
+            .trans_builder(click, |_: &AnyState, pos| {
                 Some(GoToSelection {
                     speed: 200.,
                     target: pos,
                 })
             })
-            // `DoneTrigger` triggers when the `Done` component is added to the entity. When they're
-            // done going to the selection, idle.
-            .trans::<GoToSelection>(DoneTrigger::Success, Idle)
+            // `done` triggers when the `Done` component is added to the entity. When they're done
+            // going to the selection, idle.
+            .trans::<GoToSelection, _>(done(Some(Done::Success)), Idle)
             .set_trans_logging(true),
         Idle,
     ));
 }
 
-#[derive(Clone, Reflect)]
-struct Click;
-
-impl OptionTrigger for Click {
-    type Param<'w, 's> = (Res<'w, Input<MouseButton>>, Res<'w, CursorPosition>);
-    type Some = Vec2;
-
-    fn trigger(&self, _: Entity, (mouse, cursor_position): Self::Param<'_, '_>) -> Option<Vec2> {
-        mouse
-            .just_pressed(MouseButton::Left)
-            .then_some(())
-            .and(**cursor_position)
-    }
+fn click(mouse: Res<Input<MouseButton>>, cursor_position: Res<CursorPosition>) -> Option<Vec2> {
+    mouse
+        .just_pressed(MouseButton::Left)
+        .then_some(())
+        .and(**cursor_position)
 }
 
 #[derive(Clone, Component, Reflect)]
@@ -77,7 +69,7 @@ fn go_to_target(
         if movement.length() > delta.length() {
             transform.translation = target.extend(transform.translation.z);
             // The player has reached the target! Add the `Done` component to the player, causing
-            // `DoneTrigger` to trigger. It will be automatically removed later this frame.
+            // `done` to trigger. It will be automatically removed later this frame.
             commands.entity(entity).insert(Done::Success);
             info!("Done!")
         } else {

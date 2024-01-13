@@ -14,6 +14,7 @@ use crate::{
     prelude::*,
     set::StateSet,
     state::{Insert, OnEvent},
+    trigger::{IntoTrigger, TriggerOut},
 };
 
 pub(crate) fn machine_plugin(app: &mut App) {
@@ -22,43 +23,42 @@ pub(crate) fn machine_plugin(app: &mut App) {
 
 /// Performs a transition. We have a trait for this so we can erase [`TransitionImpl`]'s generics.
 trait Transition: Debug + Send + Sync + 'static {
-    /// Called before any call to `run`
+    /// Called before any call to `check`
     fn init(&mut self, world: &mut World);
     /// Checks whether the transition should be taken. `entity` is the entity that contains the
     /// state machine.
-    fn run(&mut self, world: &World, entity: Entity) -> Option<(Box<dyn Insert>, TypeId)>;
+    fn check(&mut self, world: &World, entity: Entity) -> Option<(Box<dyn Insert>, TypeId)>;
 }
 
 /// An edge in the state machine. The type parameters are the [`Trigger`] that causes this
-/// transition, the previous state the function that takes the trigger's output and builds the next
+/// transition, the previous state, the function that takes the trigger's output and builds the next
 /// state, and the next state itself.
 struct TransitionImpl<Trig, Prev, Build, Next>
 where
     Trig: Trigger,
-    Prev: MachineState,
-    Build: 'static + Fn(&Prev, Trig::Ok) -> Option<Next> + Send + Sync,
-    Next: Component + MachineState,
+    Prev: EntityState,
+    Build: 'static
+        + Fn(&Prev, <<Trig as Trigger>::Out as TriggerOut>::Ok) -> Option<Next>
+        + Send
+        + Sync,
+    Next: Component + EntityState,
 {
     pub trigger: Trig,
     pub builder: Build,
-    // To run this, we need a [`SystemState`]. We can't initialize that until we have a [`World`],
-    // so it starts out empty
-    system_state: Option<SystemState<Trig::Param<'static, 'static>>>,
     phantom: PhantomData<Prev>,
 }
 
 impl<Trig, Prev, Build, Next> Debug for TransitionImpl<Trig, Prev, Build, Next>
 where
     Trig: Trigger,
-    Prev: MachineState,
-    Build: Fn(&Prev, Trig::Ok) -> Option<Next> + Send + Sync,
-    Next: Component + MachineState,
+    Prev: EntityState,
+    Build: Fn(&Prev, <<Trig as Trigger>::Out as TriggerOut>::Ok) -> Option<Next> + Send + Sync,
+    Next: Component + EntityState,
 {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         f.debug_struct("TransitionImpl")
             .field("trigger", &self.trigger.type_id())
             .field("builder", &self.builder.type_id())
-            .field("system_state", &self.system_state.type_id())
             .field("phantom", &self.phantom)
             .finish()
     }
@@ -67,21 +67,19 @@ where
 impl<Trig, Prev, Build, Next> Transition for TransitionImpl<Trig, Prev, Build, Next>
 where
     Trig: Trigger,
-    Prev: MachineState,
-    Build: Fn(&Prev, Trig::Ok) -> Option<Next> + Send + Sync,
-    Next: Component + MachineState,
+    Prev: EntityState,
+    Build: Fn(&Prev, <<Trig as Trigger>::Out as TriggerOut>::Ok) -> Option<Next> + Send + Sync,
+    Next: Component + EntityState,
 {
     fn init(&mut self, world: &mut World) {
-        if self.system_state.is_none() {
-            self.system_state = Some(SystemState::new(world));
-        }
+        self.trigger.init(world);
     }
 
-    fn run(&mut self, world: &World, entity: Entity) -> Option<(Box<dyn Insert>, TypeId)> {
-        let state = self.system_state.as_mut().unwrap();
-        let Ok(res) = self.trigger.trigger(entity, state.get(world)) else {
+    fn check(&mut self, world: &World, entity: Entity) -> Option<(Box<dyn Insert>, TypeId)> {
+        let Ok(res) = self.trigger.check(entity, world).into_result() else {
             return None;
         };
+
         (self.builder)(Prev::from_entity(entity, world), res)
             .map(|state| (Box::new(state) as Box<dyn Insert>, TypeId::of::<Next>()))
     }
@@ -90,15 +88,14 @@ where
 impl<Trig, Prev, Build, Next> TransitionImpl<Trig, Prev, Build, Next>
 where
     Trig: Trigger,
-    Prev: MachineState,
-    Build: Fn(&Prev, Trig::Ok) -> Option<Next> + Send + Sync,
-    Next: Component + MachineState,
+    Prev: EntityState,
+    Build: Fn(&Prev, <<Trig as Trigger>::Out as TriggerOut>::Ok) -> Option<Next> + Send + Sync,
+    Next: Component + EntityState,
 {
     pub fn new(trigger: Trig, builder: Build) -> Self {
         Self {
             trigger,
             builder,
-            system_state: None,
             phantom: PhantomData,
         }
     }
@@ -114,7 +111,7 @@ struct StateMetadata {
 }
 
 impl StateMetadata {
-    fn new<S: MachineState>() -> Self {
+    fn new<S: EntityState>() -> Self {
         Self {
             name: type_name::<S>().to_owned(),
             on_enter: default(),
@@ -126,7 +123,7 @@ impl StateMetadata {
 }
 
 /// State machine component. Entities with this component will have components (the states) added
-/// and removed based on the transitions that you add. Build one with `StateMachine::new`,
+/// and removed based on the transitions that you add. Build one with `StateMachine::default`,
 /// `StateMachine::trans`, and other methods.
 #[derive(Component)]
 pub struct StateMachine {
@@ -136,7 +133,9 @@ pub struct StateMachine {
     /// each StateMetadata would mean that e.g. we'd have to check every AnyState trigger before any
     /// state-specific trigger or vice versa.
     transitions: Vec<(TypeId, Box<dyn Transition>)>,
-    /// If true, all transitions are logged at info level.
+    /// Transitions must be initialized whenever a transition is added or a transition occurs
+    init_transitions: bool,
+    /// If true, all transitions are logged at info level
     log_transitions: bool,
 }
 
@@ -152,6 +151,7 @@ impl Default for StateMachine {
                 },
             )]),
             transitions: vec![],
+            init_transitions: true,
             log_transitions: false,
         }
     }
@@ -166,17 +166,18 @@ impl StateMachine {
 
     /// Adds a transition to the state machine. When the entity is in the state given as a
     /// type parameter, and the given trigger occurs, it will transition to the state given as a
-    /// function parameter. Transitions have priority in the order they are added.
-    pub fn trans<S: MachineState>(
+    /// function parameter. Elide the `Marker` type parameter with `_`. Transitions have priority
+    /// in the order they are added.
+    pub fn trans<S: EntityState, Marker>(
         self,
-        trigger: impl Trigger,
+        trigger: impl IntoTrigger<Marker>,
         state: impl Clone + Component,
     ) -> Self {
         self.trans_builder(trigger, move |_: &S, _| Some(state.clone()))
     }
 
-    /// Get the medatada for the given state, creating it if necessary.
-    fn metadata_mut<S: MachineState>(&mut self) -> &mut StateMetadata {
+    /// Get the metadata for the given state, creating it if necessary.
+    fn metadata_mut<S: EntityState>(&mut self) -> &mut StateMetadata {
         self.states
             .entry(TypeId::of::<S>())
             .or_insert(StateMetadata::new::<S>())
@@ -185,24 +186,34 @@ impl StateMachine {
     /// Adds a transition builder to the state machine. When the entity is in `Prev` state, and
     /// `Trig` occurs, the given builder will be run on `Trig::Ok`. If the builder returns
     /// `Some(Next)`, the machine will transition to that `Next` state.
-    pub fn trans_builder<Prev: MachineState, Trig: Trigger, Next: Clone + Component>(
+    pub fn trans_builder<
+        Prev: EntityState,
+        Trig: IntoTrigger<Marker>,
+        Next: Clone + Component,
+        Marker,
+    >(
         mut self,
         trigger: Trig,
-        builder: impl 'static + Clone + Fn(&Prev, Trig::Ok) -> Option<Next> + Send + Sync,
+        builder: impl 'static
+            + Clone
+            + Fn(&Prev, <<Trig::Trigger as Trigger>::Out as TriggerOut>::Ok) -> Option<Next>
+            + Send
+            + Sync,
     ) -> Self {
         self.metadata_mut::<Prev>();
         self.metadata_mut::<Next>();
-        let transition = TransitionImpl::<_, Prev, _, _>::new(trigger, builder);
+        let transition = TransitionImpl::<_, Prev, _, _>::new(trigger.into_trigger(), builder);
         self.transitions.push((
             TypeId::of::<Prev>(),
             Box::new(transition) as Box<dyn Transition>,
         ));
+        self.init_transitions = true;
         self
     }
 
     /// Adds an on-enter event to the state machine. Whenever the state machine transitions into the
     /// given state, it will run the event.
-    pub fn on_enter<S: MachineState>(
+    pub fn on_enter<S: EntityState>(
         mut self,
         on_enter: impl 'static + Fn(&mut EntityCommands) + Send + Sync,
     ) -> Self {
@@ -215,7 +226,7 @@ impl StateMachine {
 
     /// Adds an on-exit event to the state machine. Whenever the state machine transitions from the
     /// given state, it will run the event.
-    pub fn on_exit<S: MachineState>(
+    pub fn on_exit<S: EntityState>(
         mut self,
         on_exit: impl 'static + Fn(&mut EntityCommands) + Send + Sync,
     ) -> Self {
@@ -228,7 +239,7 @@ impl StateMachine {
 
     /// Adds an on-enter command to the state machine. Whenever the state machine transitions into
     /// the given state, it will run the command.
-    pub fn command_on_enter<S: MachineState>(
+    pub fn command_on_enter<S: EntityState>(
         mut self,
         command: impl Clone + Command + Sync,
     ) -> Self {
@@ -241,10 +252,7 @@ impl StateMachine {
 
     /// Adds an on-exit command to the state machine. Whenever the state machine transitions from
     /// the given state, it will run the command.
-    pub fn command_on_exit<S: MachineState>(
-        mut self,
-        command: impl Clone + Command + Sync,
-    ) -> Self {
+    pub fn command_on_exit<S: EntityState>(mut self, command: impl Clone + Command + Sync) -> Self {
         self.metadata_mut::<S>()
             .on_exit
             .push(OnEvent::Command(Box::new(command)));
@@ -261,6 +269,10 @@ impl StateMachine {
     /// Initialize all transitions. Must be executed before `run`. This is separate because `run` is
     /// parallelizable (takes a `&World`) but this isn't (takes a `&mut World`).
     fn init_transitions(&mut self, world: &mut World) {
+        if !self.init_transitions {
+            return;
+        }
+
         for (_, transition) in &mut self.transitions {
             transition.init(world);
         }
@@ -287,7 +299,7 @@ impl StateMachine {
             .transitions
             .iter_mut()
             .filter(|(type_id, _)| *type_id == current || *type_id == TypeId::of::<AnyState>())
-            .find_map(|(_, transition)| transition.run(world, entity))
+            .find_map(|(_, transition)| transition.check(world, entity))
         else {
             return;
         };
@@ -305,6 +317,8 @@ impl StateMachine {
         if self.log_transitions {
             info!("{entity:?} transitioned from {} to {}", from.name, to.name);
         }
+
+        self.init_transitions = true;
     }
 
     /// When running the transition system, we replace all StateMachines in the world with their
@@ -312,8 +326,9 @@ impl StateMachine {
     fn stub(&self) -> Self {
         Self {
             states: default(),
-            log_transitions: false,
             transitions: default(),
+            init_transitions: false,
+            log_transitions: false,
         }
     }
 }
@@ -377,14 +392,8 @@ mod tests {
     struct SomeResource;
 
     /// Triggers when `SomeResource` is present
-    struct ResourcePresent;
-
-    impl BoolTrigger for ResourcePresent {
-        type Param<'w, 's> = Option<Res<'w, SomeResource>>;
-
-        fn trigger(&self, _entity: Entity, param: Self::Param<'_, '_>) -> bool {
-            param.is_some()
-        }
+    fn resource_present(res: Option<Res<SomeResource>>) -> bool {
+        res.is_some()
     }
 
     #[test]
@@ -407,8 +416,8 @@ mod tests {
         app.add_systems(Update, transition);
 
         let machine = StateMachine::default()
-            .trans::<StateOne>(AlwaysTrigger, StateTwo)
-            .trans::<StateTwo>(ResourcePresent, StateThree);
+            .trans::<StateOne, _>(always, StateTwo)
+            .trans::<StateTwo, _>(resource_present, StateThree);
         let entity = app.world.spawn((machine, StateOne)).id();
 
         assert!(app.world.get::<StateOne>(entity).is_some());
@@ -438,7 +447,7 @@ mod tests {
         let entity = app
             .world
             .spawn((
-                StateMachine::default().trans::<StateOne>(AlwaysTrigger, StateOne),
+                StateMachine::default().trans::<StateOne, _>(always, StateOne),
                 StateOne,
             ))
             .id();

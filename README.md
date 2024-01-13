@@ -9,9 +9,9 @@ and other entities that occupy various states. It allows for greater reusability
 between entities, compared to managing mutually-exclusive components directly in your systems.
 
 A *state* is a component attached to an entity that defines its current behavior, such as `Jumping`
-or `Stunned`. A *trigger* is a type that checks information about entities in the world, such as
-`NearPosition` or `HealthBelowThreshold`. A *transition* links two states: one to transition from,
-and one to transition to; once a given trigger has occurred. A *state machine* is a component
+or `Stunned`. A *trigger* is a system that checks information about entities in the world, such as
+`near_position` or `health_below_threshold`. A *transition* links two states: one to transition
+from, and one to transition to; once a given trigger has occurred. A *state machine* is a component
 attached to an entity that keeps track of that entity's transitions, and automatically changes the
 entity's state according to those transitions.
 
@@ -41,18 +41,23 @@ improvement, feel free to submit an issue or pr!
 ## Features
 
 - State machine component with user-defined states and triggers
-- 15 built-in triggers
-    - `AlwaysTrigger`: always triggers
+- 30 built-in triggers
+    - `always`: always triggers
     - `NotTrigger`, `AndTrigger`, and `OrTrigger`: combines triggers with boolean logic
-    - `DoneTrigger`: triggers when the user adds the `Done` component to the entity
-    - 9 more triggers enabled by the `leafwing_input` feature: `ValueTrigger`,
-    `ClampedValueTrigger`, `AxisPairTrigger`, `ClampedAxisPairTrigger`, `JustPressedTrigger`,
-    `PressedTrigger`, `JustReleasedTrigger`, `ReleasedTrigger`, and `ActionDataTrigger`
-    - `EventTrigger`: triggers when it reads an event of the given type
+    - `done`: triggers when the `Done` component is added to the entity
+    - 24 more triggers enabled by the `leafwing_input` feature: `action_data`, `axis_pair`,
+    `axis_pair_length_bounds`, `axis_pair_max_length`, `axis_pair_min_length`,
+    `axis_pair_rotation_bounds`, `axis_pair_unbounded`, `clamped_axis_pair`,
+    `clamped_axis_pair_length_bounds`, `clamped_axis_pair_max_length`,
+    `clamped_axis_pair_min_length`, `clamped_axis_pair_rotation_bounds`,
+    `clamped_axis_pair_unbounded`, `clamped_value`, `clamped_value_max`, `clamped_value_min`,
+    `clamped_value_unbounded`, `just_pressed`, `just_released`, `pressed`, `value`, `value_max`,
+    `value_min`, and `value_unbounded`
+    - `on_event`: triggers when it reads an event of the given type
 - `AnyState` state, that can be used in type parameters to represent any state
 - Transition builders that allow dataflow from outgoing states and triggers to incoming states
 (`StateMachine::trans_builder`)
-- Automatically run events upon entering or exiting states (`StateMachine::on_enter`,
+- Automatically perform behavior upon entering or exiting states (`StateMachine::on_enter`,
 `StateMachine::on_exit`, `StateMachine::command_on_enter` and `StateMachine::command_on_exit`)
 
 ## Comparison with [`big-brain`](https://github.com/zkat/big-brain)
@@ -60,11 +65,12 @@ improvement, feel free to submit an issue or pr!
 Finite state machine is an old and well-worn pattern in game AI, so its strengths and limitations
 are known. It is good for entities that:
 
-1. Do not have a large number of interconnected states, since the number of transitions can grow
+1. Do not have a huge number of interconnected states, since the number of transitions can grow
 quadratically. Then it becomes easy to forget to add a transition, causing difficult bugs.
 2. Act rigidly, like the enemies in Spelunky, who act according to clear triggers such as
-got-jumped-on-by-player and waited-for-5-seconds, and unlike the dwarves in Dwarf Fortress, who
-weigh their options of what to do before taking an action.
+got-jumped-on-by-player and waited-for-5-seconds and are predictable to the player, and unlike the
+dwarves in Dwarf Fortress, who weigh their options of what to do before taking an action and feel
+lively.
 
 `seldom_state` is a finite state machine implementation, so it may not be suitable for all types of
 game AI. If you need a solution that works with more complex states and transitions, then you may
@@ -105,8 +111,8 @@ Consider a 2D platformer, where the player has a sword. The player can run and j
 can swing the sword. So whether you're running, jumping, or dashing, you always swing the sword the
 same way, independently of movement state. In this case, you might want to have a movement state
 machine and an attack state machine. Since entities can only have one state machine, spawn another
-entity with its own state machine, and capture the original `Entity` in closures in
-`command_on_enter` and `command_on_exit`.
+entity (as a child, I would suggest) with its own state machine, and capture the original `Entity`
+in closures in `command_on_enter` and `command_on_exit`.
 
 However, perhaps your states are not so independent. Maybe attacking while dashing puts the player
 in a `PowerAttack` state, or the attack cooldown doesn't count down while moving. Depending on the

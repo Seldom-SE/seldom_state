@@ -7,19 +7,19 @@ use bevy::ecs::system::{Command, EntityCommands};
 
 use crate::prelude::*;
 
-use self::sealed::MachineStateSealed;
+use self::sealed::EntityStateSealed;
 
 mod sealed {
     use bevy::ecs::system::EntityCommands;
 
     use crate::prelude::*;
 
-    pub trait MachineStateSealed {
+    pub trait EntityStateSealed {
         fn from_entity(entity: Entity, world: &World) -> &Self;
         fn remove(entity: &mut EntityCommands);
     }
 
-    impl<T: Clone + Component> MachineStateSealed for T {
+    impl<T: Clone + Component> EntityStateSealed for T {
         fn from_entity(entity: Entity, world: &World) -> &Self {
             world.entity(entity).get().unwrap()
         }
@@ -29,7 +29,7 @@ mod sealed {
         }
     }
 
-    impl MachineStateSealed for AnyState {
+    impl EntityStateSealed for AnyState {
         fn from_entity(_: Entity, _: &World) -> &Self {
             &AnyState(())
         }
@@ -42,16 +42,16 @@ mod sealed {
 ///
 /// If you are concerned with performance, consider having your states use sparse set storage if
 /// transitions are very frequent.
-pub trait MachineState: 'static + Clone + Send + Sync + MachineStateSealed {}
+pub trait EntityState: 'static + Clone + Send + Sync + EntityStateSealed {}
 
-impl<T: Clone + Component> MachineState for T {}
+impl<T: Clone + Component> EntityState for T {}
 
 /// State that represents any state. Transitions from [`AnyState`] may transition from any other
 /// state.
 #[derive(Clone, Debug)]
 pub struct AnyState(pub(crate) ());
 
-impl MachineState for AnyState {}
+impl EntityState for AnyState {}
 
 pub(crate) trait Insert: Send {
     fn insert(self: Box<Self>, entity: &mut EntityCommands) -> TypeId;
@@ -133,7 +133,7 @@ mod tests {
         app.add_systems(Update, transition);
 
         let machine = StateMachine::default()
-            .trans::<StateOne>(AlwaysTrigger, StateTwo)
+            .trans::<StateOne, _>(always, StateTwo)
             .on_exit::<StateOne>(|commands| commands.commands().insert_resource(SomeResource))
             .on_enter::<StateTwo>(|commands| commands.commands().insert_resource(AnotherResource));
 

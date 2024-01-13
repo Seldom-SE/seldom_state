@@ -28,10 +28,23 @@ fn init(mut commands: Commands, asset_server: Res<AssetServer>) {
         ))
         .id();
 
-    // Since we use this trigger twice, let's declare it out here so we can reuse it
-    let near_player = Near {
-        target: player,
-        range: 300.,
+    // This is our trigger, which is a Bevy system that returns a `bool`, `Option`, or `Result`. We
+    // define the trigger as a closure within this function so it can use variables in the scope
+    // (namely, `player`). For the sake of example, we also define this trigger as an external
+    // function later.
+    let near_player = move |In(entity): In<Entity>, transforms: Query<&Transform>| {
+        let distance = transforms
+            .get(player)
+            .unwrap()
+            .translation
+            .truncate()
+            .distance(transforms.get(entity).unwrap().translation.truncate());
+
+        // Check whether the target is within range. If it is, return `Ok` to trigger!
+        match distance <= 300. {
+            true => Ok(distance),
+            false => Err(distance),
+        }
     };
 
     // The enemy
@@ -45,8 +58,8 @@ fn init(mut commands: Commands, asset_server: Res<AssetServer>) {
         // priority, but triggers after the first accepted one may still be checked.
         StateMachine::default()
             // Add a transition. When they're in `Idle` state, and the `near_player` trigger occurs,
-            // switch to that instance of the `Follow` state
-            .trans::<Idle>(
+            // switch to this instance of the `Follow` state
+            .trans::<Idle, _>(
                 near_player,
                 // Transitions accept specific instances of states
                 Follow {
@@ -57,7 +70,7 @@ fn init(mut commands: Commands, asset_server: Res<AssetServer>) {
             // Add a second transition. When they're in the `Follow` state, and the `near_player`
             // trigger does not occur, switch to the `Idle` state. `.not()` is a combinator that
             // negates the trigger. `.and(other)` and `.or(other)` also exist.
-            .trans::<Follow>(near_player.not(), Idle)
+            .trans::<Follow, _>(near_player.not(), Idle)
             // Enable transition logging
             .set_trans_logging(true),
         // The initial state is `Idle`
@@ -65,62 +78,18 @@ fn init(mut commands: Commands, asset_server: Res<AssetServer>) {
     ));
 }
 
-// Let's define our trigger!. `Clone` and `Copy` are not necessary, but it's nicer to do so here.
-
-// This trigger checks if the entity is within the the given range of the target
-#[derive(Clone, Copy)]
-struct Near {
-    target: Entity,
-    range: f32,
-}
-
-// Also see `OptionTrigger` and `BoolTrigger`
-impl Trigger for Near {
-    // Put the parameters that your trigger needs here. `Param` is read-only; you may not access
-    // system params that write to the `World`. `Time` is included here to demonstrate how to get
-    // multiple system params.
-    type Param<'w, 's> = (Query<'w, 's, &'static Transform>, Res<'w, Time>);
-    // These types are used by transition builders, for dataflow from triggers to transitions. See
-    // `StateMachine::trans_builder`
-    type Ok = f32;
-    type Err = f32;
-
-    // This function checks if the given entity should trigger. It runs once per potential
-    // transition for each entity that is in a state that can transition on this trigger. return
-    // `Ok` to trigger or `Err` to not trigger.
-    fn trigger(
-        &self,
-        entity: Entity,
-        (transforms, _time): Self::Param<'_, '_>,
-    ) -> Result<f32, f32> {
-        // Find the distance between the target and this entity
-        let distance = transforms
-            .get(self.target)
-            .unwrap()
-            .translation
-            .truncate()
-            .distance(transforms.get(entity).unwrap().translation.truncate());
-
-        // Check whether the target is within range. If it is, return `Ok` to trigger!
-        match distance <= self.range {
-            true => Ok(distance),
-            false => Err(distance),
-        }
-    }
-}
-
-// Now let's define our states! States must implement `Component` and `Clone`. `MachineState` is
+// Now let's define our states! States must implement `Component` and `Clone`. `EntityState` is
 // implemented automatically for valid states. Feel free to mutate/insert/remove states manually,
-// but don't put it in multiple or zero states, else it will panic. Manually inserted/removed
-// states will not trigger `on_enter`/`on_exit` events registered to the `StateMachine`.
+// but don't put your entity in multiple or zero states, else it will panic. Manually inserted/
+// removed states will not trigger `on_enter`/`on_exit` events registered to the `StateMachine`.
 
 // Entities in the `Idle` state do nothing
-#[derive(Clone, Component, Reflect)]
+#[derive(Clone, Component)]
 #[component(storage = "SparseSet")]
 struct Idle;
 
 // Entities in the `Follow` state move toward the given entity at the given speed
-#[derive(Clone, Component, Reflect)]
+#[derive(Clone, Component)]
 #[component(storage = "SparseSet")]
 struct Follow {
     target: Entity,
@@ -145,6 +114,29 @@ fn follow(
             * follow.speed
             * time.delta_seconds();
     }
+}
+
+// For the sake of example, this is a function that returns the `near_player` trigger from before.
+// This may be useful so that triggers that accept case-by-case values may be used across the
+// codebase. Triggers that don't need to accept any values from local code may be defined as normal
+// Bevy systems (see the `done` example). Also consider implementing the `Trigger` trait directly.
+#[allow(dead_code)]
+fn near(target: Entity) -> impl Trigger<Out = Result<f32, f32>> {
+    (move |In(entity): In<Entity>, transforms: Query<&Transform>| {
+        let distance = transforms
+            .get(target)
+            .unwrap()
+            .translation
+            .truncate()
+            .distance(transforms.get(entity).unwrap().translation.truncate());
+
+        // Check whether the target is within range. If it is, return `Ok` to trigger!
+        match distance <= 300. {
+            true => Ok(distance),
+            false => Err(distance),
+        }
+    })
+    .into_trigger()
 }
 
 // The code after this comment is not related to `seldom_state`. It's just player movement.

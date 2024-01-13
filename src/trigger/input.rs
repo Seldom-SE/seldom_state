@@ -1,4 +1,4 @@
-use std::any::type_name;
+use std::{any::type_name, ops::Range};
 
 use leafwing_input_manager::{
     action_state::ActionData, axislike::DualAxisData, orientation::Rotation,
@@ -6,23 +6,10 @@ use leafwing_input_manager::{
 
 use crate::prelude::*;
 
-/// Trigger that transitions if the given [`Actionlike`]'s value is within the given bounds
-#[derive(Debug, Clone)]
-pub struct ValueTrigger<A: Actionlike> {
-    /// The action
-    pub action: A,
-    /// The minimum value. If no minimum is necessary, use [`f32::NEG_INFINITY`], or similar
-    pub min: f32,
-    /// The maximum value. If no maximum is necessary, use [`f32::INFINITY`], or similar
-    pub max: f32,
-}
-
-impl<A: Actionlike> Trigger for ValueTrigger<A> {
-    type Param<'w, 's> = Query<'w, 's, &'static ActionState<A>>;
-    type Ok = f32;
-    type Err = f32;
-
-    fn trigger(&self, entity: Entity, actors: Self::Param<'_, '_>) -> Result<f32, f32> {
+/// Trigger that transitions if the given [`Actionlike`]'s value is within the given bounds.
+/// Consider using `f32::NEG_INFINITY`/`f32::INFINITY` in the bounds.
+pub fn value<A: Actionlike>(action: A, bounds: Range<f32>) -> impl Trigger<Out = Result<f32, f32>> {
+    (move |In(entity): In<Entity>, actors: Query<&ActionState<A>>| {
         let value = actors
             .get(entity)
             .unwrap_or_else(|_| {
@@ -31,60 +18,38 @@ impl<A: Actionlike> Trigger for ValueTrigger<A> {
                     type_name::<A>()
                 )
             })
-            .value(self.action.clone());
+            .value(action.clone());
 
-        (value >= self.min && value <= self.max)
-            .then_some(value)
-            .ok_or(value)
-    }
+        if bounds.contains(&value) {
+            Ok(value)
+        } else {
+            Err(value)
+        }
+    })
+    .into_trigger()
 }
 
-impl<A: Actionlike> ValueTrigger<A> {
-    /// Unbounded trigger
-    pub fn unbounded(action: A) -> Self {
-        Self {
-            action,
-            min: f32::NEG_INFINITY,
-            max: f32::INFINITY,
-        }
-    }
-
-    /// Trigger with a minimum bound
-    pub fn min(action: A, min: f32) -> Self {
-        Self {
-            action,
-            min,
-            max: f32::INFINITY,
-        }
-    }
-
-    /// Trigger with a maximum bound
-    pub fn max(action: A, max: f32) -> Self {
-        Self {
-            action,
-            min: f32::NEG_INFINITY,
-            max,
-        }
-    }
+/// Unbounded [`value`]
+pub fn value_unbounded(action: impl Actionlike) -> impl Trigger<Out = Result<f32, f32>> {
+    value(action, f32::NEG_INFINITY..f32::INFINITY)
 }
 
-/// Trigger that transitions if the given [`Actionlike`]'s value is within the given bounds
-#[derive(Debug, Clone)]
-pub struct ClampedValueTrigger<A: Actionlike> {
-    /// The action
-    pub action: A,
-    /// The minimum value. If no minimum is necessary, use `f32::NEG_INFINITY`, or similar.
-    pub min: f32,
-    /// The maximum value. If no maximum is necessary, use `f32::INFINITY`, or similar.
-    pub max: f32,
+/// [`value`] with only a minimum bound
+pub fn value_min(action: impl Actionlike, min: f32) -> impl Trigger<Out = Result<f32, f32>> {
+    value(action, min..f32::INFINITY)
 }
 
-impl<A: Actionlike> Trigger for ClampedValueTrigger<A> {
-    type Param<'w, 's> = Query<'w, 's, &'static ActionState<A>>;
-    type Ok = f32;
-    type Err = f32;
+/// [`value`] with only a maximum bound
+pub fn value_max(action: impl Actionlike, max: f32) -> impl Trigger<Out = Result<f32, f32>> {
+    value(action, f32::NEG_INFINITY..max)
+}
 
-    fn trigger(&self, entity: Entity, actors: Self::Param<'_, '_>) -> Result<f32, f32> {
+/// [`value`] clamped to [-1, 1]
+pub fn clamped_value<A: Actionlike>(
+    action: A,
+    bounds: Range<f32>,
+) -> impl Trigger<Out = Result<f32, f32>> {
+    (move |In(entity): In<Entity>, actors: Query<&ActionState<A>>| {
         let value = actors
             .get(entity)
             .unwrap_or_else(|_| {
@@ -93,72 +58,49 @@ impl<A: Actionlike> Trigger for ClampedValueTrigger<A> {
                     type_name::<A>()
                 )
             })
-            .clamped_value(self.action.clone());
+            .clamped_value(action.clone());
 
-        (value >= self.min && value <= self.max)
-            .then_some(value)
-            .ok_or(value)
-    }
+        if bounds.contains(&value) {
+            Ok(value)
+        } else {
+            Err(value)
+        }
+    })
+    .into_trigger()
 }
 
-impl<A: Actionlike> ClampedValueTrigger<A> {
-    /// Unbounded trigger
-    pub fn unbounded(action: A) -> Self {
-        Self {
-            action,
-            min: f32::NEG_INFINITY,
-            max: f32::INFINITY,
-        }
-    }
+/// Unbounded [`clamped_value`]
+pub fn clamped_value_unbounded(action: impl Actionlike) -> impl Trigger<Out = Result<f32, f32>> {
+    clamped_value(action, f32::NEG_INFINITY..f32::INFINITY)
+}
 
-    /// Trigger with a minimum bound
-    pub fn min(action: A, min: f32) -> Self {
-        Self {
-            action,
-            min,
-            max: f32::INFINITY,
-        }
-    }
+/// [`clamped_value`] with only a minimum bound
+pub fn clamped_value_min(
+    action: impl Actionlike,
+    min: f32,
+) -> impl Trigger<Out = Result<f32, f32>> {
+    clamped_value(action, min..f32::INFINITY)
+}
 
-    /// Trigger with a maximum bound
-    pub fn max(action: A, max: f32) -> Self {
-        Self {
-            action,
-            min: f32::NEG_INFINITY,
-            max,
-        }
-    }
+/// [`clamped_value`] with only a maximum bound
+pub fn clamped_value_max(
+    action: impl Actionlike,
+    max: f32,
+) -> impl Trigger<Out = Result<f32, f32>> {
+    clamped_value(action, f32::NEG_INFINITY..max)
 }
 
 /// Trigger that transitions if the given [`Actionlike`]'s [`DualAxisData`] is within the given
-/// bounds
-#[derive(Debug, Clone)]
-pub struct AxisPairTrigger<A: Actionlike> {
-    /// The action
-    pub action: A,
-    /// Minimum axis pair length. If no minimum is necessary, use `0.`. To exclude specifically
-    /// neutral axis pairs, use `f32::EPSILON`, or similar.
-    pub min_length: f32,
-    /// Maximum axis pair length. If no maximum is necessary, use `f32::INFINITY`, or similar.
-    pub max_length: f32,
-    /// Minimum rotation, measured clockwise from midnight. If rotation bounds are not necessary,
-    /// set this and `max_rotation` to the same value.
-    pub min_rotation: Rotation,
-    /// Maximum rotation, measured clockwise from midnight. If rotation bounds are not necessary,
-    /// set this and `min_rotation` to the same value.
-    pub max_rotation: Rotation,
-}
-
-impl<A: Actionlike> Trigger for AxisPairTrigger<A> {
-    type Param<'w, 's> = Query<'w, 's, &'static ActionState<A>>;
-    type Ok = DualAxisData;
-    type Err = Option<DualAxisData>;
-
-    fn trigger(
-        &self,
-        entity: Entity,
-        actors: Self::Param<'_, '_>,
-    ) -> Result<DualAxisData, Option<DualAxisData>> {
+/// bounds. If no minimum length is necessary, use `0.`. To exclude specifically neutral axis pairs,
+/// use a small positive value. If no maximum length is necessary, use `f32::INFINITY`, or similar.
+/// If rotation bounds are not necessary, use the same value for the minimum and maximum ex.
+/// `Rotation::NORTH..Rotation::NORTH`.
+pub fn axis_pair<A: Actionlike>(
+    action: A,
+    length_bounds: Range<f32>,
+    rotation_bounds: Range<Rotation>,
+) -> impl Trigger<Out = Result<DualAxisData, Option<DualAxisData>>> {
+    (move |In(entity): In<Entity>, actors: Query<&ActionState<A>>| {
         let axis_pair = actors
             .get(entity)
             .unwrap_or_else(|_| {
@@ -167,208 +109,158 @@ impl<A: Actionlike> Trigger for AxisPairTrigger<A> {
                     type_name::<A>()
                 )
             })
-            .axis_pair(self.action.clone());
+            .axis_pair(action.clone());
 
         axis_pair
             .and_then(|axis_pair| {
                 let length = axis_pair.length();
                 let rotation = axis_pair.rotation();
 
-                (length >= self.min_length
-                    && length <= self.max_length
+                (length_bounds.contains(&length)
                     && rotation
-                        .map(|rotation| match self.min_rotation < self.max_rotation {
-                            true => rotation >= self.min_rotation && rotation <= self.max_rotation,
-                            false => rotation >= self.min_rotation || rotation <= self.max_rotation,
+                        .map(|rotation| {
+                            if rotation_bounds.start < rotation_bounds.end {
+                                rotation >= rotation_bounds.start && rotation <= rotation_bounds.end
+                            } else {
+                                rotation >= rotation_bounds.start || rotation <= rotation_bounds.end
+                            }
                         })
                         .unwrap_or(true))
                 .then_some(axis_pair)
             })
             .ok_or(axis_pair)
-    }
+    })
+    .into_trigger()
 }
 
-impl<A: Actionlike> AxisPairTrigger<A> {
-    /// Unbounded trigger
-    pub fn unbounded(action: A) -> Self {
-        Self {
-            action,
-            min_length: 0.,
-            max_length: f32::INFINITY,
-            min_rotation: Rotation::NORTH,
-            max_rotation: Rotation::NORTH,
-        }
-    }
-
-    /// Trigger with a minimum length bound
-    pub fn min_length(action: A, min_length: f32) -> Self {
-        Self {
-            action,
-            min_length,
-            max_length: f32::INFINITY,
-            min_rotation: Rotation::NORTH,
-            max_rotation: Rotation::NORTH,
-        }
-    }
-
-    /// Trigger with a maximum length bound
-    pub fn max_length(action: A, max_length: f32) -> Self {
-        Self {
-            action,
-            min_length: 0.,
-            max_length,
-            min_rotation: Rotation::NORTH,
-            max_rotation: Rotation::NORTH,
-        }
-    }
-
-    /// Trigger with length bounds
-    pub fn length_bounds(action: A, min_length: f32, max_length: f32) -> Self {
-        Self {
-            action,
-            min_length,
-            max_length,
-            min_rotation: Rotation::NORTH,
-            max_rotation: Rotation::NORTH,
-        }
-    }
-
-    /// Trigger with rotation bounds
-    pub fn rotation_bounds(action: A, min_rotation: Rotation, max_rotation: Rotation) -> Self {
-        Self {
-            action,
-            min_length: 0.,
-            max_length: f32::INFINITY,
-            min_rotation,
-            max_rotation,
-        }
-    }
+/// Unbounded [`axis_pair`]
+pub fn axis_pair_unbounded(
+    action: impl Actionlike,
+) -> impl Trigger<Out = Result<DualAxisData, Option<DualAxisData>>> {
+    axis_pair(action, 0.0..f32::INFINITY, Rotation::NORTH..Rotation::NORTH)
 }
 
-/// Trigger that transitions if the given [`Actionlike`]'s [`DualAxisData`] is within the given
-/// bounds
-#[derive(Debug, Clone)]
-pub struct ClampedAxisPairTrigger<A: Actionlike> {
-    /// The action
-    pub action: A,
-    /// Minimum axis pair length. If no minimum is necessary, use `0.`. To exclude specifically
-    /// neutral axis pairs, use `f32::EPSILON`, or similar.
-    pub min_length: f32,
-    /// Maximum axis pair length. If no maximum is necessary, use `f32::INFINITY`, or similar.
-    pub max_length: f32,
-    /// Minimum rotation, measured clockwise from midnight. If rotation bounds are not necessary,
-    /// set this and `max_rotation` to the same value.
-    pub min_rotation: Rotation,
-    /// Maximum rotation, measured clockwise from midnight. If rotation bounds are not necessary,
-    /// set this and `min_rotation` to the same value.
-    pub max_rotation: Rotation,
+/// [`axis_pair`] with only a minimum length bound
+pub fn axis_pair_min_length(
+    action: impl Actionlike,
+    min_length: f32,
+) -> impl Trigger<Out = Result<DualAxisData, Option<DualAxisData>>> {
+    axis_pair(
+        action,
+        min_length..f32::INFINITY,
+        Rotation::NORTH..Rotation::NORTH,
+    )
 }
 
-impl<A: Actionlike> Trigger for ClampedAxisPairTrigger<A> {
-    type Param<'w, 's> = Query<'w, 's, &'static ActionState<A>>;
-    type Ok = DualAxisData;
-    type Err = Option<DualAxisData>;
+/// [`axis_pair`] with only a maximum length bound
+pub fn axis_pair_max_length(
+    action: impl Actionlike,
+    max_length: f32,
+) -> impl Trigger<Out = Result<DualAxisData, Option<DualAxisData>>> {
+    axis_pair(action, 0.0..max_length, Rotation::NORTH..Rotation::NORTH)
+}
 
-    fn trigger(
-        &self,
-        entity: Entity,
-        actors: Self::Param<'_, '_>,
-    ) -> Result<DualAxisData, Option<DualAxisData>> {
+/// [`axis_pair`] with only length bounds
+pub fn axis_pair_length_bounds(
+    action: impl Actionlike,
+    length_bounds: Range<f32>,
+) -> impl Trigger<Out = Result<DualAxisData, Option<DualAxisData>>> {
+    axis_pair(action, length_bounds, Rotation::NORTH..Rotation::NORTH)
+}
+
+/// [`axis_pair`] with only rotation bounds
+pub fn axis_pair_rotation_bounds(
+    action: impl Actionlike,
+    rotation_bounds: Range<Rotation>,
+) -> impl Trigger<Out = Result<DualAxisData, Option<DualAxisData>>> {
+    axis_pair(action, 0.0..f32::INFINITY, rotation_bounds)
+}
+
+/// [`axis_pair`] with axes clamped to [-1, 1]
+pub fn clamped_axis_pair<A: Actionlike>(
+    action: A,
+    length_bounds: Range<f32>,
+    rotation_bounds: Range<Rotation>,
+) -> impl Trigger<Out = Result<DualAxisData, Option<DualAxisData>>> {
+    (move |In(entity): In<Entity>, actors: Query<&ActionState<A>>| {
         let axis_pair = actors
             .get(entity)
             .unwrap_or_else(|_| {
                 panic!(
-                    "entity {entity:?} with `ClampedAxisPairTrigger<{0}>` is missing `ActionState<{0}>`",
+                    "entity {entity:?} with `AxisPairTrigger<{0}>` is missing `ActionState<{0}>`",
                     type_name::<A>()
                 )
             })
-            .axis_pair(self.action.clone());
+            .clamped_axis_pair(action.clone());
 
         axis_pair
             .and_then(|axis_pair| {
                 let length = axis_pair.length();
                 let rotation = axis_pair.rotation();
 
-                (length >= self.min_length
-                    && length <= self.max_length
+                (length_bounds.contains(&length)
                     && rotation
-                        .map(|rotation| match self.min_rotation < self.max_rotation {
-                            true => rotation >= self.min_rotation && rotation <= self.max_rotation,
-                            false => rotation >= self.min_rotation || rotation <= self.max_rotation,
+                        .map(|rotation| {
+                            if rotation_bounds.start < rotation_bounds.end {
+                                rotation >= rotation_bounds.start && rotation <= rotation_bounds.end
+                            } else {
+                                rotation >= rotation_bounds.start || rotation <= rotation_bounds.end
+                            }
                         })
                         .unwrap_or(true))
                 .then_some(axis_pair)
             })
             .ok_or(axis_pair)
-    }
+    })
+    .into_trigger()
 }
 
-impl<A: Actionlike> ClampedAxisPairTrigger<A> {
-    /// Unbounded trigger
-    pub fn unbounded(action: A) -> Self {
-        Self {
-            action,
-            min_length: 0.,
-            max_length: f32::INFINITY,
-            min_rotation: Rotation::NORTH,
-            max_rotation: Rotation::NORTH,
-        }
-    }
+/// Unbounded [`clamped_axis_pair`]
+pub fn clamped_axis_pair_unbounded(
+    action: impl Actionlike,
+) -> impl Trigger<Out = Result<DualAxisData, Option<DualAxisData>>> {
+    clamped_axis_pair(action, 0.0..f32::INFINITY, Rotation::NORTH..Rotation::NORTH)
+}
 
-    /// Trigger with a minimum length bound
-    pub fn min_length(action: A, min_length: f32) -> Self {
-        Self {
-            action,
-            min_length,
-            max_length: f32::INFINITY,
-            min_rotation: Rotation::NORTH,
-            max_rotation: Rotation::NORTH,
-        }
-    }
+/// [`clamped_axis_pair`] with only a minimum length bound
+pub fn clamped_axis_pair_min_length(
+    action: impl Actionlike,
+    min_length: f32,
+) -> impl Trigger<Out = Result<DualAxisData, Option<DualAxisData>>> {
+    clamped_axis_pair(
+        action,
+        min_length..f32::INFINITY,
+        Rotation::NORTH..Rotation::NORTH,
+    )
+}
 
-    /// Trigger with a maximum length bound
-    pub fn max_length(action: A, max_length: f32) -> Self {
-        Self {
-            action,
-            min_length: 0.,
-            max_length,
-            min_rotation: Rotation::NORTH,
-            max_rotation: Rotation::NORTH,
-        }
-    }
+/// [`clamped_axis_pair`] with only a maximum length bound
+pub fn clamped_axis_pair_max_length(
+    action: impl Actionlike,
+    max_length: f32,
+) -> impl Trigger<Out = Result<DualAxisData, Option<DualAxisData>>> {
+    clamped_axis_pair(action, 0.0..max_length, Rotation::NORTH..Rotation::NORTH)
+}
 
-    /// Trigger with length bounds
-    pub fn length_bounds(action: A, min_length: f32, max_length: f32) -> Self {
-        Self {
-            action,
-            min_length,
-            max_length,
-            min_rotation: Rotation::NORTH,
-            max_rotation: Rotation::NORTH,
-        }
-    }
+/// [`clamped_axis_pair`] with only length bounds
+pub fn clamped_axis_pair_length_bounds(
+    action: impl Actionlike,
+    length_bounds: Range<f32>,
+) -> impl Trigger<Out = Result<DualAxisData, Option<DualAxisData>>> {
+    clamped_axis_pair(action, length_bounds, Rotation::NORTH..Rotation::NORTH)
+}
 
-    /// Trigger with rotation bounds
-    pub fn rotation_bounds(action: A, min_rotation: Rotation, max_rotation: Rotation) -> Self {
-        Self {
-            action,
-            min_length: 0.,
-            max_length: f32::INFINITY,
-            min_rotation,
-            max_rotation,
-        }
-    }
+/// [`clamped_axis_pair`] with only rotation bounds
+pub fn clamped_axis_pair_rotation_bounds(
+    action: impl Actionlike,
+    rotation_bounds: Range<Rotation>,
+) -> impl Trigger<Out = Result<DualAxisData, Option<DualAxisData>>> {
+    clamped_axis_pair(action, 0.0..f32::INFINITY, rotation_bounds)
 }
 
 /// Trigger that transitions upon pressing the given [`Actionlike`]
-#[derive(Debug, Deref, DerefMut, Clone)]
-pub struct JustPressedTrigger<A: Actionlike>(pub A);
-
-impl<A: Actionlike> BoolTrigger for JustPressedTrigger<A> {
-    type Param<'w, 's> = Query<'w, 's, &'static ActionState<A>>;
-
-    fn trigger(&self, entity: Entity, actors: Self::Param<'_, '_>) -> bool {
-        let Self(action) = self;
+pub fn just_pressed<A: Actionlike>(action: A) -> impl Trigger<Out = bool> {
+    (move |In(entity): In<Entity>, actors: Query<&ActionState<A>>| {
         actors
             .get(entity)
             .unwrap_or_else(|_| {
@@ -378,84 +270,45 @@ impl<A: Actionlike> BoolTrigger for JustPressedTrigger<A> {
                 )
             })
             .just_pressed(action.clone())
-    }
+    })
+    .into_trigger()
 }
 
 /// Trigger that transitions while pressing the given [`Actionlike`]
-#[derive(Debug, Deref, DerefMut, Clone)]
-pub struct PressedTrigger<A: Actionlike>(pub A);
-
-impl<A: Actionlike> BoolTrigger for PressedTrigger<A> {
-    type Param<'w, 's> = Query<'w, 's, &'static ActionState<A>>;
-
-    fn trigger(&self, entity: Entity, actors: Self::Param<'_, '_>) -> bool {
-        let Self(action) = self;
+pub fn pressed<A: Actionlike>(action: A) -> impl Trigger<Out = bool> {
+    (move |In(entity): In<Entity>, actors: Query<&ActionState<A>>| {
         actors
             .get(entity)
             .unwrap_or_else(|_| {
                 panic!(
-                    "entity {entity:?} with `PressedTrigger<{0}>` is missing `ActionState<{0}>`",
+                    "entity {entity:?} with `JustPressedTrigger<{0}>` is missing `ActionState<{0}>`",
                     type_name::<A>()
                 )
             })
             .pressed(action.clone())
-    }
+    })
+    .into_trigger()
 }
 
 /// Trigger that transitions upon releasing the given [`Actionlike`]
-#[derive(Debug, Deref, DerefMut, Clone)]
-pub struct JustReleasedTrigger<A: Actionlike>(pub A);
-
-#[cfg(feature = "leafwing_input")]
-impl<A: Actionlike> BoolTrigger for JustReleasedTrigger<A> {
-    type Param<'w, 's> = Query<'w, 's, &'static ActionState<A>>;
-
-    fn trigger(&self, entity: Entity, actors: Self::Param<'_, '_>) -> bool {
-        let Self(action) = self;
+pub fn just_released<A: Actionlike>(action: A) -> impl Trigger<Out = bool> {
+    (move |In(entity): In<Entity>, actors: Query<&ActionState<A>>| {
         actors
             .get(entity)
             .unwrap_or_else(|_| {
                 panic!(
-                    "entity {entity:?} with `JustReleasedTrigger<{0}>` is missing `ActionState<{0}>`",
+                    "entity {entity:?} with `JustPressedTrigger<{0}>` is missing `ActionState<{0}>`",
                     type_name::<A>()
                 )
             })
             .just_released(action.clone())
-    }
-}
-
-/// Trigger that transitions while the given [`Actionlike`] is released
-#[derive(Debug, Deref, DerefMut, Clone)]
-pub struct ReleasedTrigger<A: Actionlike>(pub A);
-
-impl<A: Actionlike> BoolTrigger for ReleasedTrigger<A> {
-    type Param<'w, 's> = Query<'w, 's, &'static ActionState<A>>;
-
-    fn trigger(&self, entity: Entity, actors: Self::Param<'_, '_>) -> bool {
-        let Self(action) = self;
-        actors
-            .get(entity)
-            .unwrap_or_else(|_| {
-                panic!(
-                    "entity {entity:?} with `ReleasedTrigger<{0}>` is missing `ActionState<{0}>`",
-                    type_name::<A>()
-                )
-            })
-            .just_pressed(action.clone())
-    }
+    })
+    .into_trigger()
 }
 
 /// Trigger that always transitions, providing the given [`Actionlike`]'s [`ActionData`]
-#[derive(Debug, Deref, DerefMut, Clone)]
-pub struct ActionDataTrigger<A: Actionlike>(pub A);
-
-impl<A: Actionlike> Trigger for ActionDataTrigger<A> {
-    type Param<'w, 's> = Query<'w, 's, &'static ActionState<A>>;
-    type Ok = ActionData;
-    type Err = Never;
-
-    fn trigger(&self, entity: Entity, actors: Self::Param<'_, '_>) -> Result<ActionData, Never> {
-        let Self(action) = self;
+pub fn action_data<A: Actionlike>(action: A) -> impl Trigger<Out = Result<ActionData, Never>> {
+    (move |In(entity): In<Entity>, actors: Query<&ActionState<A>>| {
         Ok(actors
             .get(entity)
             .unwrap_or_else(|_| {
@@ -466,5 +319,6 @@ impl<A: Actionlike> Trigger for ActionDataTrigger<A> {
             })
             .action_data(action.clone())
             .clone())
-    }
+    })
+    .into_trigger()
 }

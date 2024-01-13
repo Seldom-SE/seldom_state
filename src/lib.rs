@@ -37,17 +37,19 @@ pub mod prelude {
 
     #[cfg(feature = "leafwing_input")]
     pub use crate::trigger::{
-        ActionDataTrigger, AxisPairTrigger, ClampedAxisPairTrigger, ClampedValueTrigger,
-        JustPressedTrigger, JustReleasedTrigger, PressedTrigger, ReleasedTrigger, ValueTrigger,
+        action_data, axis_pair, axis_pair_length_bounds, axis_pair_max_length,
+        axis_pair_min_length, axis_pair_rotation_bounds, axis_pair_unbounded, clamped_axis_pair,
+        clamped_axis_pair_length_bounds, clamped_axis_pair_max_length,
+        clamped_axis_pair_min_length, clamped_axis_pair_rotation_bounds,
+        clamped_axis_pair_unbounded, clamped_value, clamped_value_max, clamped_value_min,
+        clamped_value_unbounded, just_pressed, just_released, pressed, value, value_max, value_min,
+        value_unbounded,
     };
     pub use crate::{
         machine::StateMachine,
-        state::{AnyState, MachineState},
+        state::{AnyState, EntityState},
         state_machine_plugin,
-        trigger::{
-            AlwaysTrigger, BoolTrigger, Done, DoneTrigger, EventTrigger, Never, OptionTrigger,
-            Trigger,
-        },
+        trigger::{always, done, on_event, Done, IntoTrigger, Never, Trigger},
         StateMachinePlugin,
     };
 }
