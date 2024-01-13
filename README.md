@@ -22,8 +22,8 @@ commands.spawn((
     // ... (other inserts)
     MyInitialState::new(),
     StateMachine::default()
-        .trans::<MyInitialState>(my_trigger_1, my_state_2)
-        .trans::<AnyState>(my_trigger_3, my_state_4)
+        .trans::<MyInitialState, _>(my_trigger_1, my_state_2)
+        .trans::<AnyState, _>(my_trigger_3, my_state_4)
         .trans_builder(my_trigger_5, |my_state_6: &MyState6, trigger_data| {
             make_state_7(my_state_6, trigger_data)
         })
