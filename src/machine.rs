@@ -276,6 +276,8 @@ impl StateMachine {
         for (_, transition) in &mut self.transitions {
             transition.init(world);
         }
+
+        self.init_transitions = false;
     }
 
     /// Runs all transitions until one is actually taken. If one is taken, logs the transition and

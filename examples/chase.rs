@@ -32,6 +32,9 @@ fn init(mut commands: Commands, asset_server: Res<AssetServer>) {
     // define the trigger as a closure within this function so it can use variables in the scope
     // (namely, `player`). For the sake of example, we also define this trigger as an external
     // function later.
+    //
+    // Triggers are reinitialized after each transition, so they won't read events that occured in a
+    // previous state, `Local`s are reset between transitions, etc.
     let near_player = move |In(entity): In<Entity>, transforms: Query<&Transform>| {
         let distance = transforms
             .get(player)
