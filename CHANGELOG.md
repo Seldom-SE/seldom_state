@@ -1,5 +1,28 @@
 # Changelog
 
+## 0.9 (2024-01-12)
+
+### Added
+
+- `IntoSystem` trait, which allows systems which return `bool`, `Option`, or `Result`, and accept
+`Entity` or nothing as input, to be used as triggers
+- `TriggerIn` trait, which allows systems which accept nothing as input to be used as triggers
+- `TriggerOut` trait, which allows triggers to output `bool` or `Option` without `BoolTrigger` and
+`OptionTrigger`
+- `SystemTrigger` type, which is also used for system triggers
+
+### Changed
+
+- `trans` and `trans_builder` each have a new type parameter, which should simply be elided with `_`
+- Replaced all built-in trigger types with system equivalents
+- Renamed `MachineState` to `EntityState`
+- `Trigger` has an `Out` type and `init` and `check` functions, instead of `Param`, `Ok`, and `Err`
+types and a `trigger` function
+
+### Removed
+
+- `BoolTrigger` and `OptionTrigger`
+
 ## 0.8 (2023-11-12)
 
 ### Added
