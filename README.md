@@ -55,7 +55,7 @@ improvement, feel free to submit an issue or pr!
     `value_min`, and `value_unbounded`
     - `on_event`: triggers when it reads an event of the given type
     - Bevy's [built-in run conditions](https://docs.rs/bevy/latest/bevy/ecs/schedule/common_conditions/index.html)
-    also work as triggers.
+    also work as triggers
 - `AnyState` state, that can be used in type parameters to represent any state
 - Transition builders that allow dataflow from outgoing states and triggers to incoming states
 (`StateMachine::trans_builder`)
