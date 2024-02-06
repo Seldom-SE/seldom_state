@@ -33,7 +33,7 @@ fn init(mut commands: Commands, asset_server: Res<AssetServer>) {
     // (namely, `player`). For the sake of example, we also define this trigger as an external
     // function later.
     //
-    // Triggers are reinitialized after each transition, so they won't read events that occured in a
+    // Triggers are reinitialized after each transition, so they won't read events that occurred in a
     // previous state, `Local`s are reset between transitions, etc.
     let near_player = move |In(entity): In<Entity>, transforms: Query<&Transform>| {
         let distance = transforms
