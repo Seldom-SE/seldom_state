@@ -1,5 +1,20 @@
 # Changelog
 
+## 0.10 (2024-02-21)
+
+### Added
+
+- `Out` definitions to trigger combinator functions' return types
+
+### Changed
+
+- Updated `bevy` to 0.13
+- Updated `leafwing-input-manager` to 0.13
+
+### Fixed
+
+- `on_event` trigger could detect events that occured before the latest transition
+
 ## 0.9 (2024-01-12)
 
 ### Added
