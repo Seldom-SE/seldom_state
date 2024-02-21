@@ -113,17 +113,52 @@ pub trait IntoTrigger<Marker>: Sized {
     fn into_trigger(self) -> Self::Trigger;
 
     /// Negates the trigger. Do not override.
-    fn not(self) -> impl Trigger {
+    fn not(
+        self,
+    ) -> impl Trigger<
+        Out = Result<
+            <<Self::Trigger as Trigger>::Out as TriggerOut>::Err,
+            <<Self::Trigger as Trigger>::Out as TriggerOut>::Ok,
+        >,
+    > {
         NotTrigger(self.into_trigger())
     }
 
     /// Combines these triggers by logical AND. Do not override.
-    fn and<Marker2>(self, other: impl IntoTrigger<Marker2>) -> impl Trigger {
+    fn and<Marker2, T: IntoTrigger<Marker2>>(
+        self,
+        other: T,
+    ) -> impl Trigger<
+        Out = Result<
+            (
+                <<Self::Trigger as Trigger>::Out as TriggerOut>::Ok,
+                <<T::Trigger as Trigger>::Out as TriggerOut>::Ok,
+            ),
+            Either<
+                <<Self::Trigger as Trigger>::Out as TriggerOut>::Err,
+                <<T::Trigger as Trigger>::Out as TriggerOut>::Err,
+            >,
+        >,
+    > {
         AndTrigger(self.into_trigger(), other.into_trigger())
     }
 
     /// Combines these triggers by logical OR. Do not override.
-    fn or<Marker2>(self, other: impl IntoTrigger<Marker2>) -> impl Trigger {
+    fn or<Marker2, T: IntoTrigger<Marker2>>(
+        self,
+        other: T,
+    ) -> impl Trigger<
+        Out = Result<
+            Either<
+                <<Self::Trigger as Trigger>::Out as TriggerOut>::Ok,
+                <<T::Trigger as Trigger>::Out as TriggerOut>::Ok,
+            >,
+            (
+                <<Self::Trigger as Trigger>::Out as TriggerOut>::Err,
+                <<T::Trigger as Trigger>::Out as TriggerOut>::Err,
+            ),
+        >,
+    > {
         OrTrigger(self.into_trigger(), other.into_trigger())
     }
 }
@@ -291,7 +326,16 @@ pub fn done(expected: Option<Done>) -> impl Trigger<Out = bool> {
 }
 
 /// Trigger that transitions when it receives the associated event
-pub fn on_event<T: Clone + Event>(mut reader: EventReader<T>) -> Option<T> {
+pub fn on_event<T: Clone + Event>(
+    mut has_run: Local<bool>,
+    mut reader: EventReader<T>,
+) -> Option<T> {
+    if !*has_run {
+        reader.read().last();
+        *has_run = true;
+        return None;
+    }
+
     reader.read().last().cloned()
 }
 

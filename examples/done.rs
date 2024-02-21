@@ -38,7 +38,10 @@ fn init(mut commands: Commands, asset_server: Res<AssetServer>) {
     ));
 }
 
-fn click(mouse: Res<Input<MouseButton>>, cursor_position: Res<CursorPosition>) -> Option<Vec2> {
+fn click(
+    mouse: Res<ButtonInput<MouseButton>>,
+    cursor_position: Res<CursorPosition>,
+) -> Option<Vec2> {
     mouse
         .just_pressed(MouseButton::Left)
         .then_some(())

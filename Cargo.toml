@@ -2,30 +2,30 @@
 name = "seldom_state"
 version = "0.9.0"
 edition = "2021"
-categories = [ "game-development" ]
+categories = ["game-development"]
 description = "Component-based state machine plugin for Bevy. Useful for AI, player state, and other entities that occupy various states."
-exclude = [ "assets/" ]
-keywords = [ "gamedev", "bevy", "ai", "state-machine" ]
+exclude = ["assets/"]
+keywords = ["gamedev", "bevy", "ai", "state-machine"]
 license = "MIT OR Apache-2.0"
 readme = "README.md"
 repository = "https://github.com/Seldom-SE/seldom_state"
 
 [features]
-leafwing_input = [ "dep:leafwing-input-manager" ]
+leafwing_input = ["dep:leafwing-input-manager"]
 
 [dependencies]
-bevy = { version = "0.12.0", default-features = false }
+bevy = { version = "0.13.0", default-features = false }
 either = "1.9"
-leafwing-input-manager = { version = "0.11.1", default-features = false, optional = true }
-seldom_fn_plugin = "0.5.0"
+leafwing-input-manager = { version = "0.13.0", default-features = false, optional = true }
+seldom_fn_plugin = "0.6.0"
 
 [dev-dependencies]
-bevy = "0.12.0"
-leafwing-input-manager = "0.11.1"
+bevy = "0.13.0"
+leafwing-input-manager = "0.13.0"
 
 [[example]]
 name = "input"
-required-features = [ "leafwing_input" ]
+required-features = ["leafwing_input"]
 
 [package.metadata.docs.rs]
 all-features = true

@@ -31,13 +31,13 @@ fn init(mut commands: Commands, asset_server: Res<AssetServer>) {
         // From `leafwing-input-manager`
         InputManagerBundle {
             input_map: InputMap::default()
-                .insert(VirtualAxis::horizontal_arrow_keys(), Action::Move)
+                .insert(Action::Move, VirtualAxis::horizontal_arrow_keys())
                 .insert(
-                    SingleAxis::symmetric(GamepadAxisType::LeftStickX, 0.),
                     Action::Move,
+                    SingleAxis::symmetric(GamepadAxisType::LeftStickX, 0.),
                 )
-                .insert(KeyCode::Space, Action::Jump)
-                .insert(GamepadButtonType::South, Action::Jump)
+                .insert(Action::Jump, KeyCode::Space)
+                .insert(Action::Jump, GamepadButtonType::South)
                 .build(),
             ..default()
         },

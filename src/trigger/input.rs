@@ -18,7 +18,7 @@ pub fn value<A: Actionlike>(action: A, bounds: Range<f32>) -> impl Trigger<Out =
                     type_name::<A>()
                 )
             })
-            .value(action.clone());
+            .value(&action);
 
         if bounds.contains(&value) {
             Ok(value)
@@ -58,7 +58,7 @@ pub fn clamped_value<A: Actionlike>(
                     type_name::<A>()
                 )
             })
-            .clamped_value(action.clone());
+            .clamped_value(&action);
 
         if bounds.contains(&value) {
             Ok(value)
@@ -109,7 +109,7 @@ pub fn axis_pair<A: Actionlike>(
                     type_name::<A>()
                 )
             })
-            .axis_pair(action.clone());
+            .axis_pair(&action);
 
         axis_pair
             .and_then(|axis_pair| {
@@ -191,7 +191,7 @@ pub fn clamped_axis_pair<A: Actionlike>(
                     type_name::<A>()
                 )
             })
-            .clamped_axis_pair(action.clone());
+            .clamped_axis_pair(&action);
 
         axis_pair
             .and_then(|axis_pair| {
@@ -269,7 +269,7 @@ pub fn just_pressed<A: Actionlike>(action: A) -> impl Trigger<Out = bool> {
                     type_name::<A>()
                 )
             })
-            .just_pressed(action.clone())
+            .just_pressed(&action)
     })
     .into_trigger()
 }
@@ -285,7 +285,7 @@ pub fn pressed<A: Actionlike>(action: A) -> impl Trigger<Out = bool> {
                     type_name::<A>()
                 )
             })
-            .pressed(action.clone())
+            .pressed(&action)
     })
     .into_trigger()
 }
@@ -301,15 +301,15 @@ pub fn just_released<A: Actionlike>(action: A) -> impl Trigger<Out = bool> {
                     type_name::<A>()
                 )
             })
-            .just_released(action.clone())
+            .just_released(&action)
     })
     .into_trigger()
 }
 
-/// Trigger that always transitions, providing the given [`Actionlike`]'s [`ActionData`]
-pub fn action_data<A: Actionlike>(action: A) -> impl Trigger<Out = Result<ActionData, Never>> {
+/// Provides the given [`Actionlike`]'s [`ActionData`]
+pub fn action_data<A: Actionlike>(action: A) -> impl Trigger<Out = Option<ActionData>> {
     (move |In(entity): In<Entity>, actors: Query<&ActionState<A>>| {
-        Ok(actors
+        actors
             .get(entity)
             .unwrap_or_else(|_| {
                 panic!(
@@ -317,8 +317,8 @@ pub fn action_data<A: Actionlike>(action: A) -> impl Trigger<Out = Result<Action
                     type_name::<A>()
                 )
             })
-            .action_data(action.clone())
-            .clone())
+            .action_data(&action)
+            .cloned()
     })
     .into_trigger()
 }
