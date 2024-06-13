@@ -5,7 +5,10 @@ use std::{
 };
 
 use bevy::{
-    ecs::system::{Command, EntityCommands, SystemState},
+    ecs::{
+        system::{EntityCommands, SystemState},
+        world::Command,
+    },
     tasks::{ComputeTaskPool, ParallelSliceMut},
     utils::HashMap,
 };
@@ -17,7 +20,7 @@ use crate::{
     trigger::{IntoTrigger, TriggerOut},
 };
 
-pub(crate) fn machine_plugin(app: &mut App) {
+pub(crate) fn plug(app: &mut App) {
     app.add_systems(PostUpdate, transition.in_set(StateSet::Transition));
 }
 
@@ -363,7 +366,7 @@ pub(crate) fn transition(
     let par_commands = system_state.get(world);
     let task_pool = ComputeTaskPool::get();
     // chunk size of None means to automatically pick
-    borrowed_machines.par_splat_map_mut(task_pool, None, |chunk| {
+    borrowed_machines.par_splat_map_mut(task_pool, None, |_, chunk| {
         for (entity, machine) in chunk {
             par_commands.command_scope(|mut commands| machine.run(world, *entity, &mut commands));
         }
@@ -403,11 +406,11 @@ mod tests {
         let mut app = App::new();
         app.add_systems(Update, transition);
         let machine = StateMachine::default().with_state::<StateOne>();
-        let entity = app.world.spawn((machine, StateOne)).id();
+        let entity = app.world_mut().spawn((machine, StateOne)).id();
         app.update();
         // should have moved to state two
         assert!(
-            app.world.get::<StateOne>(entity).is_some(),
+            app.world().get::<StateOne>(entity).is_some(),
             "StateMachine should have the initial component"
         );
     }
@@ -420,25 +423,25 @@ mod tests {
         let machine = StateMachine::default()
             .trans::<StateOne, _>(always, StateTwo)
             .trans::<StateTwo, _>(resource_present, StateThree);
-        let entity = app.world.spawn((machine, StateOne)).id();
+        let entity = app.world_mut().spawn((machine, StateOne)).id();
 
-        assert!(app.world.get::<StateOne>(entity).is_some());
+        assert!(app.world().get::<StateOne>(entity).is_some());
 
         app.update();
         // should have moved to state two
-        assert!(app.world.get::<StateOne>(entity).is_none());
-        assert!(app.world.get::<StateTwo>(entity).is_some());
+        assert!(app.world().get::<StateOne>(entity).is_none());
+        assert!(app.world().get::<StateTwo>(entity).is_some());
 
         app.update();
         // not yet...
-        assert!(app.world.get::<StateTwo>(entity).is_some());
-        assert!(app.world.get::<StateThree>(entity).is_none());
+        assert!(app.world().get::<StateTwo>(entity).is_some());
+        assert!(app.world().get::<StateThree>(entity).is_none());
 
-        app.world.insert_resource(SomeResource);
+        app.world_mut().insert_resource(SomeResource);
         app.update();
         // okay, *now*
-        assert!(app.world.get::<StateTwo>(entity).is_none());
-        assert!(app.world.get::<StateThree>(entity).is_some());
+        assert!(app.world().get::<StateTwo>(entity).is_none());
+        assert!(app.world().get::<StateThree>(entity).is_some());
     }
 
     #[test]
@@ -447,7 +450,7 @@ mod tests {
         app.add_systems(Update, transition);
 
         let entity = app
-            .world
+            .world_mut()
             .spawn((
                 StateMachine::default().trans::<StateOne, _>(always, StateOne),
                 StateOne,
@@ -457,7 +460,7 @@ mod tests {
         // the sort of bug this is trying to catch: if you insert the new state and then remove the
         // old state, self-transitions will leave you without the state
         assert!(
-            app.world.get::<StateOne>(entity).is_some(),
+            app.world().get::<StateOne>(entity).is_some(),
             "transitioning from a state to itself should work"
         );
     }

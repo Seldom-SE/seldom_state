@@ -3,7 +3,7 @@ use std::{
     fmt::{self, Debug, Formatter},
 };
 
-use bevy::ecs::system::{Command, EntityCommands};
+use bevy::ecs::{system::EntityCommands, world::Command};
 
 use crate::prelude::*;
 
@@ -137,17 +137,17 @@ mod tests {
             .on_exit::<StateOne>(|commands| commands.commands().insert_resource(SomeResource))
             .on_enter::<StateTwo>(|commands| commands.commands().insert_resource(AnotherResource));
 
-        let entity = app.world.spawn((machine, StateOne)).id();
-        assert!(app.world.get::<StateOne>(entity).is_some());
+        let entity = app.world_mut().spawn((machine, StateOne)).id();
+        assert!(app.world().get::<StateOne>(entity).is_some());
 
         app.update();
-        assert!(app.world.get::<StateTwo>(entity).is_some());
+        assert!(app.world().get::<StateTwo>(entity).is_some());
         assert!(
-            app.world.contains_resource::<SomeResource>(),
+            app.world().contains_resource::<SomeResource>(),
             "exit state triggers should run"
         );
         assert!(
-            app.world.contains_resource::<AnotherResource>(),
+            app.world().contains_resource::<AnotherResource>(),
             "exit state triggers should run"
         );
     }
