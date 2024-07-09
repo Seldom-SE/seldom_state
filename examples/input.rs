@@ -2,7 +2,7 @@
 // `leafwing-input-manager` handles the input.
 
 use bevy::prelude::*;
-use leafwing_input_manager::{axislike::VirtualAxis, prelude::*};
+use leafwing_input_manager::prelude::*;
 use seldom_state::prelude::*;
 
 fn main() {
@@ -31,7 +31,7 @@ fn init(mut commands: Commands, asset_server: Res<AssetServer>) {
         // From `leafwing-input-manager`
         InputManagerBundle {
             input_map: InputMap::default()
-                .insert(Action::Move, VirtualAxis::horizontal_arrow_keys())
+                .insert(Action::Move, KeyboardVirtualAxis::HORIZONTAL_ARROW_KEYS)
                 .insert(
                     Action::Move,
                     SingleAxis::symmetric(GamepadAxisType::LeftStickX, 0.),

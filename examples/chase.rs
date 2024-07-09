@@ -2,7 +2,7 @@
 // enemy, the enemy moves towards them, until the player moves back out of range
 
 use bevy::prelude::*;
-use seldom_state::prelude::*;
+use seldom_state::prelude::{EntityTrigger, *};
 
 fn main() {
     App::new()
@@ -124,7 +124,7 @@ fn follow(
 // codebase. Triggers that don't need to accept any values from local code may be defined as normal
 // Bevy systems (see the `done` example). Also consider implementing the `Trigger` trait directly.
 #[allow(dead_code)]
-fn near(target: Entity) -> impl Trigger<Out = Result<f32, f32>> {
+fn near(target: Entity) -> impl EntityTrigger<Out = Result<f32, f32>> {
     (move |In(entity): In<Entity>, transforms: Query<&Transform>| {
         let distance = transforms
             .get(target)

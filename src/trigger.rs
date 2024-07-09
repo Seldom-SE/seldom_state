@@ -107,7 +107,7 @@ impl<Ok, Err> TriggerOut for Result<Ok, Err> {
 /// multiple instances of [`IntoSystem`]. It doesn't matter what type `Marker` is set to.
 pub trait IntoTrigger<Marker>: Sized {
     /// The [`Trigger`] type that this is converted into
-    type Trigger: Trigger;
+    type Trigger: EntityTrigger;
 
     /// Convert into a [`Trigger`]
     fn into_trigger(self) -> Self::Trigger;
@@ -115,10 +115,10 @@ pub trait IntoTrigger<Marker>: Sized {
     /// Negates the trigger. Do not override.
     fn not(
         self,
-    ) -> impl Trigger<
+    ) -> impl EntityTrigger<
         Out = Result<
-            <<Self::Trigger as Trigger>::Out as TriggerOut>::Err,
-            <<Self::Trigger as Trigger>::Out as TriggerOut>::Ok,
+            <<Self::Trigger as EntityTrigger>::Out as TriggerOut>::Err,
+            <<Self::Trigger as EntityTrigger>::Out as TriggerOut>::Ok,
         >,
     > {
         NotTrigger(self.into_trigger())
@@ -128,15 +128,15 @@ pub trait IntoTrigger<Marker>: Sized {
     fn and<Marker2, T: IntoTrigger<Marker2>>(
         self,
         other: T,
-    ) -> impl Trigger<
+    ) -> impl EntityTrigger<
         Out = Result<
             (
-                <<Self::Trigger as Trigger>::Out as TriggerOut>::Ok,
-                <<T::Trigger as Trigger>::Out as TriggerOut>::Ok,
+                <<Self::Trigger as EntityTrigger>::Out as TriggerOut>::Ok,
+                <<T::Trigger as EntityTrigger>::Out as TriggerOut>::Ok,
             ),
             Either<
-                <<Self::Trigger as Trigger>::Out as TriggerOut>::Err,
-                <<T::Trigger as Trigger>::Out as TriggerOut>::Err,
+                <<Self::Trigger as EntityTrigger>::Out as TriggerOut>::Err,
+                <<T::Trigger as EntityTrigger>::Out as TriggerOut>::Err,
             >,
         >,
     > {
@@ -147,15 +147,15 @@ pub trait IntoTrigger<Marker>: Sized {
     fn or<Marker2, T: IntoTrigger<Marker2>>(
         self,
         other: T,
-    ) -> impl Trigger<
+    ) -> impl EntityTrigger<
         Out = Result<
             Either<
-                <<Self::Trigger as Trigger>::Out as TriggerOut>::Ok,
-                <<T::Trigger as Trigger>::Out as TriggerOut>::Ok,
+                <<Self::Trigger as EntityTrigger>::Out as TriggerOut>::Ok,
+                <<T::Trigger as EntityTrigger>::Out as TriggerOut>::Ok,
             >,
             (
-                <<Self::Trigger as Trigger>::Out as TriggerOut>::Err,
-                <<T::Trigger as Trigger>::Out as TriggerOut>::Err,
+                <<Self::Trigger as EntityTrigger>::Out as TriggerOut>::Err,
+                <<T::Trigger as EntityTrigger>::Out as TriggerOut>::Err,
             ),
         >,
     > {
@@ -178,7 +178,7 @@ where
 
 /// Types that implement this may be used in [`StateMachine`]s to transition from one state to
 /// another. Look at an example for implementing this trait, since it can be tricky.
-pub trait Trigger: 'static + Send + Sized + Sync {
+pub trait EntityTrigger: 'static + Send + Sized + Sync {
     /// The trigger's output. See [`TriggerOut`].
     type Out: TriggerOut;
 
@@ -188,7 +188,7 @@ pub trait Trigger: 'static + Send + Sized + Sync {
     fn check(&mut self, entity: Entity, world: &World) -> Self::Out;
 }
 
-impl<T: Trigger> IntoTrigger<()> for T {
+impl<T: EntityTrigger> IntoTrigger<()> for T {
     type Trigger = T;
 
     fn into_trigger(self) -> T {
@@ -199,7 +199,7 @@ impl<T: Trigger> IntoTrigger<()> for T {
 /// The trigger form of a system. See [`IntoSystem`].
 pub struct SystemTrigger<T: ReadOnlySystem>(T);
 
-impl<T: ReadOnlySystem> Trigger for SystemTrigger<T>
+impl<T: ReadOnlySystem> EntityTrigger for SystemTrigger<T>
 where
     T::In: TriggerIn,
     T::Out: TriggerOut,
@@ -224,9 +224,9 @@ pub fn always() -> bool {
 
 /// Negates the given trigger
 #[derive(Debug)]
-pub struct NotTrigger<T: Trigger>(pub T);
+pub struct NotTrigger<T: EntityTrigger>(pub T);
 
-impl<T: Trigger> Trigger for NotTrigger<T> {
+impl<T: EntityTrigger> EntityTrigger for NotTrigger<T> {
     type Out = Result<<T::Out as TriggerOut>::Err, <T::Out as TriggerOut>::Ok>;
 
     fn init(&mut self, world: &mut World) {
@@ -245,9 +245,9 @@ impl<T: Trigger> Trigger for NotTrigger<T> {
 
 /// Combines two triggers by logical AND
 #[derive(Debug)]
-pub struct AndTrigger<T: Trigger, U: Trigger>(pub T, pub U);
+pub struct AndTrigger<T: EntityTrigger, U: EntityTrigger>(pub T, pub U);
 
-impl<T: Trigger, U: Trigger> Trigger for AndTrigger<T, U> {
+impl<T: EntityTrigger, U: EntityTrigger> EntityTrigger for AndTrigger<T, U> {
     type Out = Result<
         (<T::Out as TriggerOut>::Ok, <U::Out as TriggerOut>::Ok),
         Either<<T::Out as TriggerOut>::Err, <U::Out as TriggerOut>::Err>,
@@ -274,9 +274,9 @@ impl<T: Trigger, U: Trigger> Trigger for AndTrigger<T, U> {
 
 /// Combines two triggers by logical OR
 #[derive(Debug)]
-pub struct OrTrigger<T: Trigger, U: Trigger>(pub T, pub U);
+pub struct OrTrigger<T: EntityTrigger, U: EntityTrigger>(pub T, pub U);
 
-impl<T: Trigger, U: Trigger> Trigger for OrTrigger<T, U> {
+impl<T: EntityTrigger, U: EntityTrigger> EntityTrigger for OrTrigger<T, U> {
     type Out = Result<
         Either<<T::Out as TriggerOut>::Ok, <U::Out as TriggerOut>::Ok>,
         (<T::Out as TriggerOut>::Err, <U::Out as TriggerOut>::Err),
@@ -315,7 +315,7 @@ pub enum Done {
 
 /// Trigger that transitions if the entity has the [`Done`] component. Provide `Some(Done::Variant)`
 /// to transition upon that particular variant, or `None` to transition upon either.
-pub fn done(expected: Option<Done>) -> impl Trigger<Out = bool> {
+pub fn done(expected: Option<Done>) -> impl EntityTrigger<Out = bool> {
     (move |In(entity): In<Entity>, dones: Query<&Done>| {
         dones
             .get(entity)

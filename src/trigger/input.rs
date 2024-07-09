@@ -1,14 +1,15 @@
 use std::{any::type_name, ops::Range};
 
-use leafwing_input_manager::{
-    action_state::ActionData, axislike::DualAxisData, orientation::Rotation,
-};
+use leafwing_input_manager::{action_state::ActionData, axislike::DualAxisData};
 
 use crate::prelude::*;
 
 /// Trigger that transitions if the given [`Actionlike`]'s value is within the given bounds.
 /// Consider using `f32::NEG_INFINITY`/`f32::INFINITY` in the bounds.
-pub fn value<A: Actionlike>(action: A, bounds: Range<f32>) -> impl Trigger<Out = Result<f32, f32>> {
+pub fn value<A: Actionlike>(
+    action: A,
+    bounds: Range<f32>,
+) -> impl EntityTrigger<Out = Result<f32, f32>> {
     (move |In(entity): In<Entity>, actors: Query<&ActionState<A>>| {
         let value = actors
             .get(entity)
@@ -30,17 +31,17 @@ pub fn value<A: Actionlike>(action: A, bounds: Range<f32>) -> impl Trigger<Out =
 }
 
 /// Unbounded [`value`]
-pub fn value_unbounded(action: impl Actionlike) -> impl Trigger<Out = Result<f32, f32>> {
+pub fn value_unbounded(action: impl Actionlike) -> impl EntityTrigger<Out = Result<f32, f32>> {
     value(action, f32::NEG_INFINITY..f32::INFINITY)
 }
 
 /// [`value`] with only a minimum bound
-pub fn value_min(action: impl Actionlike, min: f32) -> impl Trigger<Out = Result<f32, f32>> {
+pub fn value_min(action: impl Actionlike, min: f32) -> impl EntityTrigger<Out = Result<f32, f32>> {
     value(action, min..f32::INFINITY)
 }
 
 /// [`value`] with only a maximum bound
-pub fn value_max(action: impl Actionlike, max: f32) -> impl Trigger<Out = Result<f32, f32>> {
+pub fn value_max(action: impl Actionlike, max: f32) -> impl EntityTrigger<Out = Result<f32, f32>> {
     value(action, f32::NEG_INFINITY..max)
 }
 
@@ -48,7 +49,7 @@ pub fn value_max(action: impl Actionlike, max: f32) -> impl Trigger<Out = Result
 pub fn clamped_value<A: Actionlike>(
     action: A,
     bounds: Range<f32>,
-) -> impl Trigger<Out = Result<f32, f32>> {
+) -> impl EntityTrigger<Out = Result<f32, f32>> {
     (move |In(entity): In<Entity>, actors: Query<&ActionState<A>>| {
         let value = actors
             .get(entity)
@@ -70,7 +71,9 @@ pub fn clamped_value<A: Actionlike>(
 }
 
 /// Unbounded [`clamped_value`]
-pub fn clamped_value_unbounded(action: impl Actionlike) -> impl Trigger<Out = Result<f32, f32>> {
+pub fn clamped_value_unbounded(
+    action: impl Actionlike,
+) -> impl EntityTrigger<Out = Result<f32, f32>> {
     clamped_value(action, f32::NEG_INFINITY..f32::INFINITY)
 }
 
@@ -78,7 +81,7 @@ pub fn clamped_value_unbounded(action: impl Actionlike) -> impl Trigger<Out = Re
 pub fn clamped_value_min(
     action: impl Actionlike,
     min: f32,
-) -> impl Trigger<Out = Result<f32, f32>> {
+) -> impl EntityTrigger<Out = Result<f32, f32>> {
     clamped_value(action, min..f32::INFINITY)
 }
 
@@ -86,7 +89,7 @@ pub fn clamped_value_min(
 pub fn clamped_value_max(
     action: impl Actionlike,
     max: f32,
-) -> impl Trigger<Out = Result<f32, f32>> {
+) -> impl EntityTrigger<Out = Result<f32, f32>> {
     clamped_value(action, f32::NEG_INFINITY..max)
 }
 
@@ -94,12 +97,12 @@ pub fn clamped_value_max(
 /// bounds. If no minimum length is necessary, use `0.`. To exclude specifically neutral axis pairs,
 /// use a small positive value. If no maximum length is necessary, use `f32::INFINITY`, or similar.
 /// If rotation bounds are not necessary, use the same value for the minimum and maximum ex.
-/// `Rotation::NORTH..Rotation::NORTH`.
+/// `Rot2::IDENTITY..Rot2::IDENTITY`.
 pub fn axis_pair<A: Actionlike>(
     action: A,
     length_bounds: Range<f32>,
-    rotation_bounds: Range<Rotation>,
-) -> impl Trigger<Out = Result<DualAxisData, Option<DualAxisData>>> {
+    rotation_bounds: Range<Rot2>,
+) -> impl EntityTrigger<Out = Result<DualAxisData, Option<DualAxisData>>> {
     (move |In(entity): In<Entity>, actors: Query<&ActionState<A>>| {
         let axis_pair = actors
             .get(entity)
@@ -119,11 +122,8 @@ pub fn axis_pair<A: Actionlike>(
                 (length_bounds.contains(&length)
                     && rotation
                         .map(|rotation| {
-                            if rotation_bounds.start < rotation_bounds.end {
-                                rotation >= rotation_bounds.start && rotation <= rotation_bounds.end
-                            } else {
-                                rotation >= rotation_bounds.start || rotation <= rotation_bounds.end
-                            }
+                            let angle = rotation_bounds.start.angle_between(rotation_bounds.end);
+                            angle == 0. || rotation_bounds.start.angle_between(rotation) <= angle
                         })
                         .unwrap_or(true))
                 .then_some(axis_pair)
@@ -136,19 +136,19 @@ pub fn axis_pair<A: Actionlike>(
 /// Unbounded [`axis_pair`]
 pub fn axis_pair_unbounded(
     action: impl Actionlike,
-) -> impl Trigger<Out = Result<DualAxisData, Option<DualAxisData>>> {
-    axis_pair(action, 0.0..f32::INFINITY, Rotation::NORTH..Rotation::NORTH)
+) -> impl EntityTrigger<Out = Result<DualAxisData, Option<DualAxisData>>> {
+    axis_pair(action, 0.0..f32::INFINITY, Rot2::IDENTITY..Rot2::IDENTITY)
 }
 
 /// [`axis_pair`] with only a minimum length bound
 pub fn axis_pair_min_length(
     action: impl Actionlike,
     min_length: f32,
-) -> impl Trigger<Out = Result<DualAxisData, Option<DualAxisData>>> {
+) -> impl EntityTrigger<Out = Result<DualAxisData, Option<DualAxisData>>> {
     axis_pair(
         action,
         min_length..f32::INFINITY,
-        Rotation::NORTH..Rotation::NORTH,
+        Rot2::IDENTITY..Rot2::IDENTITY,
     )
 }
 
@@ -156,23 +156,23 @@ pub fn axis_pair_min_length(
 pub fn axis_pair_max_length(
     action: impl Actionlike,
     max_length: f32,
-) -> impl Trigger<Out = Result<DualAxisData, Option<DualAxisData>>> {
-    axis_pair(action, 0.0..max_length, Rotation::NORTH..Rotation::NORTH)
+) -> impl EntityTrigger<Out = Result<DualAxisData, Option<DualAxisData>>> {
+    axis_pair(action, 0.0..max_length, Rot2::IDENTITY..Rot2::IDENTITY)
 }
 
 /// [`axis_pair`] with only length bounds
 pub fn axis_pair_length_bounds(
     action: impl Actionlike,
     length_bounds: Range<f32>,
-) -> impl Trigger<Out = Result<DualAxisData, Option<DualAxisData>>> {
-    axis_pair(action, length_bounds, Rotation::NORTH..Rotation::NORTH)
+) -> impl EntityTrigger<Out = Result<DualAxisData, Option<DualAxisData>>> {
+    axis_pair(action, length_bounds, Rot2::IDENTITY..Rot2::IDENTITY)
 }
 
 /// [`axis_pair`] with only rotation bounds
 pub fn axis_pair_rotation_bounds(
     action: impl Actionlike,
-    rotation_bounds: Range<Rotation>,
-) -> impl Trigger<Out = Result<DualAxisData, Option<DualAxisData>>> {
+    rotation_bounds: Range<Rot2>,
+) -> impl EntityTrigger<Out = Result<DualAxisData, Option<DualAxisData>>> {
     axis_pair(action, 0.0..f32::INFINITY, rotation_bounds)
 }
 
@@ -180,8 +180,8 @@ pub fn axis_pair_rotation_bounds(
 pub fn clamped_axis_pair<A: Actionlike>(
     action: A,
     length_bounds: Range<f32>,
-    rotation_bounds: Range<Rotation>,
-) -> impl Trigger<Out = Result<DualAxisData, Option<DualAxisData>>> {
+    rotation_bounds: Range<Rot2>,
+) -> impl EntityTrigger<Out = Result<DualAxisData, Option<DualAxisData>>> {
     (move |In(entity): In<Entity>, actors: Query<&ActionState<A>>| {
         let axis_pair = actors
             .get(entity)
@@ -201,11 +201,8 @@ pub fn clamped_axis_pair<A: Actionlike>(
                 (length_bounds.contains(&length)
                     && rotation
                         .map(|rotation| {
-                            if rotation_bounds.start < rotation_bounds.end {
-                                rotation >= rotation_bounds.start && rotation <= rotation_bounds.end
-                            } else {
-                                rotation >= rotation_bounds.start || rotation <= rotation_bounds.end
-                            }
+                            let angle = rotation_bounds.start.angle_between(rotation_bounds.end);
+                            angle == 0. || rotation_bounds.start.angle_between(rotation) <= angle
                         })
                         .unwrap_or(true))
                 .then_some(axis_pair)
@@ -218,19 +215,19 @@ pub fn clamped_axis_pair<A: Actionlike>(
 /// Unbounded [`clamped_axis_pair`]
 pub fn clamped_axis_pair_unbounded(
     action: impl Actionlike,
-) -> impl Trigger<Out = Result<DualAxisData, Option<DualAxisData>>> {
-    clamped_axis_pair(action, 0.0..f32::INFINITY, Rotation::NORTH..Rotation::NORTH)
+) -> impl EntityTrigger<Out = Result<DualAxisData, Option<DualAxisData>>> {
+    clamped_axis_pair(action, 0.0..f32::INFINITY, Rot2::IDENTITY..Rot2::IDENTITY)
 }
 
 /// [`clamped_axis_pair`] with only a minimum length bound
 pub fn clamped_axis_pair_min_length(
     action: impl Actionlike,
     min_length: f32,
-) -> impl Trigger<Out = Result<DualAxisData, Option<DualAxisData>>> {
+) -> impl EntityTrigger<Out = Result<DualAxisData, Option<DualAxisData>>> {
     clamped_axis_pair(
         action,
         min_length..f32::INFINITY,
-        Rotation::NORTH..Rotation::NORTH,
+        Rot2::IDENTITY..Rot2::IDENTITY,
     )
 }
 
@@ -238,28 +235,28 @@ pub fn clamped_axis_pair_min_length(
 pub fn clamped_axis_pair_max_length(
     action: impl Actionlike,
     max_length: f32,
-) -> impl Trigger<Out = Result<DualAxisData, Option<DualAxisData>>> {
-    clamped_axis_pair(action, 0.0..max_length, Rotation::NORTH..Rotation::NORTH)
+) -> impl EntityTrigger<Out = Result<DualAxisData, Option<DualAxisData>>> {
+    clamped_axis_pair(action, 0.0..max_length, Rot2::IDENTITY..Rot2::IDENTITY)
 }
 
 /// [`clamped_axis_pair`] with only length bounds
 pub fn clamped_axis_pair_length_bounds(
     action: impl Actionlike,
     length_bounds: Range<f32>,
-) -> impl Trigger<Out = Result<DualAxisData, Option<DualAxisData>>> {
-    clamped_axis_pair(action, length_bounds, Rotation::NORTH..Rotation::NORTH)
+) -> impl EntityTrigger<Out = Result<DualAxisData, Option<DualAxisData>>> {
+    clamped_axis_pair(action, length_bounds, Rot2::IDENTITY..Rot2::IDENTITY)
 }
 
 /// [`clamped_axis_pair`] with only rotation bounds
 pub fn clamped_axis_pair_rotation_bounds(
     action: impl Actionlike,
-    rotation_bounds: Range<Rotation>,
-) -> impl Trigger<Out = Result<DualAxisData, Option<DualAxisData>>> {
+    rotation_bounds: Range<Rot2>,
+) -> impl EntityTrigger<Out = Result<DualAxisData, Option<DualAxisData>>> {
     clamped_axis_pair(action, 0.0..f32::INFINITY, rotation_bounds)
 }
 
 /// Trigger that transitions upon pressing the given [`Actionlike`]
-pub fn just_pressed<A: Actionlike>(action: A) -> impl Trigger<Out = bool> {
+pub fn just_pressed<A: Actionlike>(action: A) -> impl EntityTrigger<Out = bool> {
     (move |In(entity): In<Entity>, actors: Query<&ActionState<A>>| {
         actors
             .get(entity)
@@ -275,7 +272,7 @@ pub fn just_pressed<A: Actionlike>(action: A) -> impl Trigger<Out = bool> {
 }
 
 /// Trigger that transitions while pressing the given [`Actionlike`]
-pub fn pressed<A: Actionlike>(action: A) -> impl Trigger<Out = bool> {
+pub fn pressed<A: Actionlike>(action: A) -> impl EntityTrigger<Out = bool> {
     (move |In(entity): In<Entity>, actors: Query<&ActionState<A>>| {
         actors
             .get(entity)
@@ -291,7 +288,7 @@ pub fn pressed<A: Actionlike>(action: A) -> impl Trigger<Out = bool> {
 }
 
 /// Trigger that transitions upon releasing the given [`Actionlike`]
-pub fn just_released<A: Actionlike>(action: A) -> impl Trigger<Out = bool> {
+pub fn just_released<A: Actionlike>(action: A) -> impl EntityTrigger<Out = bool> {
     (move |In(entity): In<Entity>, actors: Query<&ActionState<A>>| {
         actors
             .get(entity)
@@ -307,7 +304,7 @@ pub fn just_released<A: Actionlike>(action: A) -> impl Trigger<Out = bool> {
 }
 
 /// Provides the given [`Actionlike`]'s [`ActionData`]
-pub fn action_data<A: Actionlike>(action: A) -> impl Trigger<Out = Option<ActionData>> {
+pub fn action_data<A: Actionlike>(action: A) -> impl EntityTrigger<Out = Option<ActionData>> {
     (move |In(entity): In<Entity>, actors: Query<&ActionState<A>>| {
         actors
             .get(entity)

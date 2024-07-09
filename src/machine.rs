@@ -38,10 +38,10 @@ trait Transition: Debug + Send + Sync + 'static {
 /// state, and the next state itself.
 struct TransitionImpl<Trig, Prev, Build, Next>
 where
-    Trig: Trigger,
+    Trig: EntityTrigger,
     Prev: EntityState,
     Build: 'static
-        + Fn(&Prev, <<Trig as Trigger>::Out as TriggerOut>::Ok) -> Option<Next>
+        + Fn(&Prev, <<Trig as EntityTrigger>::Out as TriggerOut>::Ok) -> Option<Next>
         + Send
         + Sync,
     Next: Component + EntityState,
@@ -53,9 +53,10 @@ where
 
 impl<Trig, Prev, Build, Next> Debug for TransitionImpl<Trig, Prev, Build, Next>
 where
-    Trig: Trigger,
+    Trig: EntityTrigger,
     Prev: EntityState,
-    Build: Fn(&Prev, <<Trig as Trigger>::Out as TriggerOut>::Ok) -> Option<Next> + Send + Sync,
+    Build:
+        Fn(&Prev, <<Trig as EntityTrigger>::Out as TriggerOut>::Ok) -> Option<Next> + Send + Sync,
     Next: Component + EntityState,
 {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
@@ -69,9 +70,10 @@ where
 
 impl<Trig, Prev, Build, Next> Transition for TransitionImpl<Trig, Prev, Build, Next>
 where
-    Trig: Trigger,
+    Trig: EntityTrigger,
     Prev: EntityState,
-    Build: Fn(&Prev, <<Trig as Trigger>::Out as TriggerOut>::Ok) -> Option<Next> + Send + Sync,
+    Build:
+        Fn(&Prev, <<Trig as EntityTrigger>::Out as TriggerOut>::Ok) -> Option<Next> + Send + Sync,
     Next: Component + EntityState,
 {
     fn init(&mut self, world: &mut World) {
@@ -90,9 +92,10 @@ where
 
 impl<Trig, Prev, Build, Next> TransitionImpl<Trig, Prev, Build, Next>
 where
-    Trig: Trigger,
+    Trig: EntityTrigger,
     Prev: EntityState,
-    Build: Fn(&Prev, <<Trig as Trigger>::Out as TriggerOut>::Ok) -> Option<Next> + Send + Sync,
+    Build:
+        Fn(&Prev, <<Trig as EntityTrigger>::Out as TriggerOut>::Ok) -> Option<Next> + Send + Sync,
     Next: Component + EntityState,
 {
     pub fn new(trigger: Trig, builder: Build) -> Self {
@@ -199,7 +202,7 @@ impl StateMachine {
         trigger: Trig,
         builder: impl 'static
             + Clone
-            + Fn(&Prev, <<Trig::Trigger as Trigger>::Out as TriggerOut>::Ok) -> Option<Next>
+            + Fn(&Prev, <<Trig::Trigger as EntityTrigger>::Out as TriggerOut>::Ok) -> Option<Next>
             + Send
             + Sync,
     ) -> Self {
