@@ -2,7 +2,7 @@
 // enemy, the enemy moves towards them, until the player moves back out of range
 
 use bevy::prelude::*;
-use seldom_state::prelude::{EntityTrigger, *};
+use seldom_state::prelude::*;
 
 fn main() {
     App::new()
