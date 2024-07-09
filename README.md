@@ -149,6 +149,7 @@ See the `chase.rs` example for further usage.
 
 | Bevy | `leafwing-input-manager` | `seldom_state` |
 | ---- | ------------------------ | -------------- |
+| 0.14 | 0.14                     | 0.11           |
 | 0.13 | 0.13                     | 0.10           |
 | 0.12 | 0.11                     | 0.8 - 0.9      |
 | 0.11 | 0.10                     | 0.7            |

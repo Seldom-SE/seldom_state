@@ -1,5 +1,17 @@
 # Changelog
 
+## 0.11 (2024-07-09)
+
+### Changed
+
+- Updated `bevy` to 0.14
+- Updated `leafwing-input-manager` to 0.14
+- Renamed `Trigger` to `EntityTrigger` to avoid conflict with `bevy::prelude::Trigger`
+
+### Removed
+
+- `seldom_fn_plugin` integration
+
 ## 0.10 (2024-02-21)
 
 ### Added
