@@ -31,7 +31,7 @@ fn init(mut commands: Commands, asset_server: Res<AssetServer>) {
         // From `leafwing-input-manager`
         InputManagerBundle {
             input_map: InputMap::default()
-                .insert(Action::Move, KeyboardVirtualAxis::HORIZONTAL_ARROW_KEYS)
+                .insert(Action::Move, VirtualAxis::horizontal_arrow_keys())
                 .insert(
                     Action::Move,
                     SingleAxis::symmetric(GamepadAxisType::LeftStickX, 0.),
