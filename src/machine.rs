@@ -33,7 +33,7 @@ trait Transition: Debug + Send + Sync + 'static {
     fn check(&mut self, world: &World, entity: Entity) -> Option<(Box<dyn Insert>, TypeId)>;
 }
 
-/// An edge in the state machine. The type parameters are the [`Trigger`] that causes this
+/// An edge in the state machine. The type parameters are the [`EntityTrigger`] that causes this
 /// transition, the previous state, the function that takes the trigger's output and builds the next
 /// state, and the next state itself.
 struct TransitionImpl<Trig, Prev, Build, Next>

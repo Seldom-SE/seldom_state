@@ -1,5 +1,5 @@
 //! Triggers are checked to determine whether the machine should transition to a new state. They can
-//! be combined with the `not`, `and`, and `or` combinators. See [`Trigger`].
+//! be combined with the `not`, `and`, and `or` combinators. See [`EntityTrigger`].
 
 #[cfg(feature = "leafwing_input")]
 mod input;
@@ -30,7 +30,7 @@ pub(crate) fn plug(app: &mut App) {
     );
 }
 
-/// Wrapper for [`core::convert::Infallible`]. Use for [`Trigger::Err`] if the trigger is
+/// Wrapper for [`core::convert::Infallible`]. Use for [`EntityTrigger::Err`] if the trigger is
 /// infallible.
 #[derive(Debug, Deref, DerefMut, Clone, Copy, PartialEq, Eq)]
 pub struct Never {
@@ -96,8 +96,10 @@ impl<Ok, Err> TriggerOut for Result<Ok, Err> {
     }
 }
 
-/// Automatically implemented for types that implement [`Trigger`] and certain types that implement
-/// [`IntoSystem`]. Types that implement [`IntoSystem`] don't automatically implement [`Trigger`],
+/// Automatically implemented for types that implement [`EntityTrigger`] and certain types that
+/// implement
+/// [`IntoSystem`]. Types that implement [`IntoSystem`] don't automatically implement
+/// [`EntityTrigger`],
 /// so if you want to accept a trigger somewhere, you can accept a generic that implements this
 /// trait instead. Otherwise, the caller will usually have to call `.into_trigger()` when providing
 /// a type that implements [`IntoSystem`].
@@ -106,10 +108,10 @@ impl<Ok, Err> TriggerOut for Result<Ok, Err> {
 /// from implementing the same instance of this trait multiple times, since a type may implement
 /// multiple instances of [`IntoSystem`]. It doesn't matter what type `Marker` is set to.
 pub trait IntoTrigger<Marker>: Sized {
-    /// The [`Trigger`] type that this is converted into
+    /// The [`EntityTrigger`] type that this is converted into
     type Trigger: EntityTrigger;
 
-    /// Convert into a [`Trigger`]
+    /// Convert into an [`EntityTrigger`]
     fn into_trigger(self) -> Self::Trigger;
 
     /// Negates the trigger. Do not override.

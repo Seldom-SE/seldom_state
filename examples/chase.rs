@@ -122,7 +122,8 @@ fn follow(
 // For the sake of example, this is a function that returns the `near_player` trigger from before.
 // This may be useful so that triggers that accept case-by-case values may be used across the
 // codebase. Triggers that don't need to accept any values from local code may be defined as normal
-// Bevy systems (see the `done` example). Also consider implementing the `Trigger` trait directly.
+// Bevy systems (see the `done` example). Also consider implementing the `EntityTrigger` trait
+// directly.
 #[allow(dead_code)]
 fn near(target: Entity) -> impl EntityTrigger<Out = Result<f32, f32>> {
     (move |In(entity): In<Entity>, transforms: Query<&Transform>| {
