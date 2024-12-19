@@ -2,6 +2,7 @@
 //! that occupy different states.
 
 #![warn(missing_docs)]
+#![allow(clippy::type_complexity)]
 
 mod machine;
 pub mod set;
