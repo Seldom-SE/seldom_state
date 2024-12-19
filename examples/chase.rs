@@ -106,7 +106,7 @@ fn follow(
         follow_transform.translation += (target_translation - follow_translation)
             .normalize_or_zero()
             * follow.speed
-            * time.delta_seconds();
+            * time.delta_secs();
     }
 }
 
@@ -153,5 +153,5 @@ fn move_player(
     )
     .normalize_or_zero()
         * PLAYER_SPEED
-        * time.delta_seconds();
+        * time.delta_secs();
 }

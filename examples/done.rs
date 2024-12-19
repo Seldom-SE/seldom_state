@@ -64,7 +64,7 @@ fn go_to_target(
     for (entity, mut transform, go_to_selection) in &mut go_to_selections {
         let target = go_to_selection.target;
         let delta = target - transform.translation.truncate();
-        let movement = delta.normalize_or_zero() * go_to_selection.speed * time.delta_seconds();
+        let movement = delta.normalize_or_zero() * go_to_selection.speed * time.delta_secs();
 
         if movement.length() > delta.length() {
             transform.translation = target.extend(transform.translation.z);
@@ -96,5 +96,5 @@ fn update_cursor_position(
     **position = windows
         .single()
         .cursor_position()
-        .and_then(|cursor_position| camera.viewport_to_world_2d(transform, cursor_position));
+        .and_then(|cursor_position| camera.viewport_to_world_2d(transform, cursor_position).ok());
 }

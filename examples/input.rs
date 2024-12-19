@@ -26,14 +26,13 @@ fn init(mut commands: Commands, asset_server: Res<AssetServer>) {
         // From `leafwing-input-manager`
         InputManagerBundle {
             input_map: InputMap::default()
-                .insert(Action::Move, VirtualAxis::horizontal_arrow_keys())
-                .insert(
+                .with_axis(Action::Move, VirtualAxis::horizontal_arrow_keys())
+                .with_axis(
                     Action::Move,
-                    SingleAxis::symmetric(GamepadAxisType::LeftStickX, 0.),
+                    GamepadControlAxis::new(GamepadAxis::LeftStickX),
                 )
-                .insert(Action::Jump, KeyCode::Space)
-                .insert(Action::Jump, GamepadButtonType::South)
-                .build(),
+                .with(Action::Jump, KeyCode::Space)
+                .with(Action::Jump, GamepadButton::South),
             ..default()
         },
         // This state machine achieves a very rigid movement system. Consider a state machine for
@@ -63,8 +62,9 @@ fn init(mut commands: Commands, asset_server: Res<AssetServer>) {
     ));
 }
 
-#[derive(Actionlike, Clone, Eq, Hash, PartialEq, Reflect)]
+#[derive(Actionlike, Clone, Eq, Hash, PartialEq, Reflect, Debug)]
 enum Action {
+    #[actionlike(Axis)]
     Move,
     Jump,
 }
@@ -92,7 +92,7 @@ const PLAYER_SPEED: f32 = 200.;
 
 fn walk(mut groundeds: Query<(&mut Transform, &Grounded)>, time: Res<Time>) {
     for (mut transform, grounded) in &mut groundeds {
-        transform.translation.x += *grounded as i32 as f32 * time.delta_seconds() * PLAYER_SPEED;
+        transform.translation.x += *grounded as i32 as f32 * time.delta_secs() * PLAYER_SPEED;
     }
 }
 
@@ -100,7 +100,7 @@ const GRAVITY: f32 = -1000.;
 
 fn fall(mut fallings: Query<(&mut Transform, &mut Falling)>, time: Res<Time>) {
     for (mut transform, mut falling) in &mut fallings {
-        let dt = time.delta_seconds();
+        let dt = time.delta_secs();
         falling.velocity += dt * GRAVITY;
         transform.translation.y += dt * falling.velocity;
     }

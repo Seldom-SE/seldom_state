@@ -1,5 +1,6 @@
 use std::{any::type_name, ops::Range};
 
+use bevy::math::InvalidDirectionError;
 use leafwing_input_manager::action_state::ActionData;
 
 use crate::prelude::*;
@@ -97,11 +98,11 @@ pub fn clamped_value_max(
 /// bounds. If no minimum length is necessary, use `0.`. To exclude specifically neutral axis pairs,
 /// use a small positive value. If no maximum length is necessary, use `f32::INFINITY`, or similar.
 /// If rotation bounds are not necessary, use the same value for the minimum and maximum ex.
-/// `Rotation::NORTH..Rotation::NORTH`.
+/// `Dir2::Y..Dir2::Y`.
 pub fn axis_pair<A: Actionlike>(
     action: A,
     length_bounds: Range<f32>,
-    rotation_bounds: Range<Rot2>,
+    rotation_bounds: Range<Dir2>,
 ) -> impl EntityTrigger<Out = Result<Vec2, Vec2>> {
     (move |In(entity): In<Entity>, actors: Query<&ActionState<A>>| {
         let axis_pair = actors
@@ -114,17 +115,25 @@ pub fn axis_pair<A: Actionlike>(
             })
             .axis_pair(&action);
 
-        let length = axis_pair.length();
-        let rotation = (length != 0.).then(|| Rot2::from(axis_pair.to_angle()));
+        match Dir2::new_and_length(axis_pair) {
+            Ok((rotation, length)) => {
+                length_bounds.contains(&length)
+                    && (rotation_bounds.start == rotation_bounds.end
+                        || ({
+                            let start = rotation_bounds.start.to_angle();
+                            let end = rotation_bounds.end.to_angle();
+                            let rotation = rotation.to_angle();
 
-        (length_bounds.contains(&length)
-            && rotation
-                .map(|rotation| {
-                    let angle = rotation_bounds.start.angle_between(rotation_bounds.end);
-                    // @e test
-                    angle == 0. || rotation_bounds.start.angle_between(rotation) <= angle
-                })
-                .unwrap_or(true))
+                            if start < end {
+                                rotation >= start && rotation <= end
+                            } else {
+                                rotation >= start || rotation <= end
+                            }
+                        }))
+            }
+            Err(InvalidDirectionError::Zero) => length_bounds.contains(&0.),
+            Err(InvalidDirectionError::Infinite | InvalidDirectionError::NaN) => false,
+        }
         .then_some(axis_pair)
         .ok_or(axis_pair)
     })
@@ -134,43 +143,39 @@ pub fn axis_pair<A: Actionlike>(
 /// Unbounded [`axis_pair`]
 pub fn axis_pair_unbounded(
     action: impl Actionlike,
-) -> impl EntityTrigger<Out = Result<DualAxisData, Option<DualAxisData>>> {
-    axis_pair(action, 0.0..f32::INFINITY, Rotation::NORTH..Rotation::NORTH)
+) -> impl EntityTrigger<Out = Result<Vec2, Vec2>> {
+    axis_pair(action, 0.0..f32::INFINITY, Dir2::Y..Dir2::Y)
 }
 
 /// [`axis_pair`] with only a minimum length bound
 pub fn axis_pair_min_length(
     action: impl Actionlike,
     min_length: f32,
-) -> impl EntityTrigger<Out = Result<DualAxisData, Option<DualAxisData>>> {
-    axis_pair(
-        action,
-        min_length..f32::INFINITY,
-        Rotation::NORTH..Rotation::NORTH,
-    )
+) -> impl EntityTrigger<Out = Result<Vec2, Vec2>> {
+    axis_pair(action, min_length..f32::INFINITY, Dir2::Y..Dir2::Y)
 }
 
 /// [`axis_pair`] with only a maximum length bound
 pub fn axis_pair_max_length(
     action: impl Actionlike,
     max_length: f32,
-) -> impl EntityTrigger<Out = Result<DualAxisData, Option<DualAxisData>>> {
-    axis_pair(action, 0.0..max_length, Rotation::NORTH..Rotation::NORTH)
+) -> impl EntityTrigger<Out = Result<Vec2, Vec2>> {
+    axis_pair(action, 0.0..max_length, Dir2::Y..Dir2::Y)
 }
 
 /// [`axis_pair`] with only length bounds
 pub fn axis_pair_length_bounds(
     action: impl Actionlike,
     length_bounds: Range<f32>,
-) -> impl EntityTrigger<Out = Result<DualAxisData, Option<DualAxisData>>> {
-    axis_pair(action, length_bounds, Rotation::NORTH..Rotation::NORTH)
+) -> impl EntityTrigger<Out = Result<Vec2, Vec2>> {
+    axis_pair(action, length_bounds, Dir2::Y..Dir2::Y)
 }
 
 /// [`axis_pair`] with only rotation bounds
 pub fn axis_pair_rotation_bounds(
     action: impl Actionlike,
-    rotation_bounds: Range<Rotation>,
-) -> impl EntityTrigger<Out = Result<DualAxisData, Option<DualAxisData>>> {
+    rotation_bounds: Range<Dir2>,
+) -> impl EntityTrigger<Out = Result<Vec2, Vec2>> {
     axis_pair(action, 0.0..f32::INFINITY, rotation_bounds)
 }
 
@@ -178,8 +183,8 @@ pub fn axis_pair_rotation_bounds(
 pub fn clamped_axis_pair<A: Actionlike>(
     action: A,
     length_bounds: Range<f32>,
-    rotation_bounds: Range<Rotation>,
-) -> impl EntityTrigger<Out = Result<DualAxisData, Option<DualAxisData>>> {
+    rotation_bounds: Range<Dir2>,
+) -> impl EntityTrigger<Out = Result<Vec2, Vec2>> {
     (move |In(entity): In<Entity>, actors: Query<&ActionState<A>>| {
         let axis_pair = actors
             .get(entity)
@@ -191,24 +196,27 @@ pub fn clamped_axis_pair<A: Actionlike>(
             })
             .clamped_axis_pair(&action);
 
-        axis_pair
-            .and_then(|axis_pair| {
-                let length = axis_pair.length();
-                let rotation = axis_pair.rotation();
+        match Dir2::new_and_length(axis_pair) {
+            Ok((rotation, length)) => {
+                length_bounds.contains(&length)
+                    && (rotation_bounds.start == rotation_bounds.end
+                        || ({
+                            let start = rotation_bounds.start.to_angle();
+                            let end = rotation_bounds.end.to_angle();
+                            let rotation = rotation.to_angle();
 
-                (length_bounds.contains(&length)
-                    && rotation
-                        .map(|rotation| {
-                            if rotation_bounds.start < rotation_bounds.end {
-                                rotation >= rotation_bounds.start && rotation <= rotation_bounds.end
+                            if start < end {
+                                rotation >= start && rotation <= end
                             } else {
-                                rotation >= rotation_bounds.start || rotation <= rotation_bounds.end
+                                rotation >= start || rotation <= end
                             }
-                        })
-                        .unwrap_or(true))
-                .then_some(axis_pair)
-            })
-            .ok_or(axis_pair)
+                        }))
+            }
+            Err(InvalidDirectionError::Zero) => length_bounds.contains(&0.),
+            Err(InvalidDirectionError::Infinite | InvalidDirectionError::NaN) => false,
+        }
+        .then_some(axis_pair)
+        .ok_or(axis_pair)
     })
     .into_trigger()
 }
@@ -216,43 +224,39 @@ pub fn clamped_axis_pair<A: Actionlike>(
 /// Unbounded [`clamped_axis_pair`]
 pub fn clamped_axis_pair_unbounded(
     action: impl Actionlike,
-) -> impl EntityTrigger<Out = Result<DualAxisData, Option<DualAxisData>>> {
-    clamped_axis_pair(action, 0.0..f32::INFINITY, Rotation::NORTH..Rotation::NORTH)
+) -> impl EntityTrigger<Out = Result<Vec2, Vec2>> {
+    clamped_axis_pair(action, 0.0..f32::INFINITY, Dir2::Y..Dir2::Y)
 }
 
 /// [`clamped_axis_pair`] with only a minimum length bound
 pub fn clamped_axis_pair_min_length(
     action: impl Actionlike,
     min_length: f32,
-) -> impl EntityTrigger<Out = Result<DualAxisData, Option<DualAxisData>>> {
-    clamped_axis_pair(
-        action,
-        min_length..f32::INFINITY,
-        Rotation::NORTH..Rotation::NORTH,
-    )
+) -> impl EntityTrigger<Out = Result<Vec2, Vec2>> {
+    clamped_axis_pair(action, min_length..f32::INFINITY, Dir2::Y..Dir2::Y)
 }
 
 /// [`clamped_axis_pair`] with only a maximum length bound
 pub fn clamped_axis_pair_max_length(
     action: impl Actionlike,
     max_length: f32,
-) -> impl EntityTrigger<Out = Result<DualAxisData, Option<DualAxisData>>> {
-    clamped_axis_pair(action, 0.0..max_length, Rotation::NORTH..Rotation::NORTH)
+) -> impl EntityTrigger<Out = Result<Vec2, Vec2>> {
+    clamped_axis_pair(action, 0.0..max_length, Dir2::Y..Dir2::Y)
 }
 
 /// [`clamped_axis_pair`] with only length bounds
 pub fn clamped_axis_pair_length_bounds(
     action: impl Actionlike,
     length_bounds: Range<f32>,
-) -> impl EntityTrigger<Out = Result<DualAxisData, Option<DualAxisData>>> {
-    clamped_axis_pair(action, length_bounds, Rotation::NORTH..Rotation::NORTH)
+) -> impl EntityTrigger<Out = Result<Vec2, Vec2>> {
+    clamped_axis_pair(action, length_bounds, Dir2::Y..Dir2::Y)
 }
 
 /// [`clamped_axis_pair`] with only rotation bounds
 pub fn clamped_axis_pair_rotation_bounds(
     action: impl Actionlike,
-    rotation_bounds: Range<Rotation>,
-) -> impl EntityTrigger<Out = Result<DualAxisData, Option<DualAxisData>>> {
+    rotation_bounds: Range<Dir2>,
+) -> impl EntityTrigger<Out = Result<Vec2, Vec2>> {
     clamped_axis_pair(action, 0.0..f32::INFINITY, rotation_bounds)
 }
 
