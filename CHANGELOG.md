@@ -1,5 +1,12 @@
 # Changelog
 
+## 0.12 (2024-12-18)
+
+### Changed
+
+- Updated `bevy` to 0.14
+- Updated `leafwing-input-manager` to 0.16 (see their `RELEASES.md` for a migration guide)
+
 ## 0.11 (2024-07-09)
 
 ### Changed
