@@ -14,14 +14,11 @@ fn main() {
 }
 
 fn init(mut commands: Commands, asset_server: Res<AssetServer>) {
-    commands.spawn(Camera2dBundle::default());
+    commands.spawn(Camera2d);
 
     commands.spawn((
-        SpriteBundle {
-            texture: asset_server.load("player.png"),
-            ..default()
-        },
         Player,
+        Idle,
         StateMachine::default()
             // When the player clicks, go there
             .trans_builder(click, |_: &AnyState, pos| {
@@ -34,7 +31,7 @@ fn init(mut commands: Commands, asset_server: Res<AssetServer>) {
             // going to the selection, idle.
             .trans::<GoToSelection, _>(done(Some(Done::Success)), Idle)
             .set_trans_logging(true),
-        Idle,
+        Sprite::from_image(asset_server.load("player.png")),
     ));
 }
 

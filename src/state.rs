@@ -107,7 +107,7 @@ impl Debug for dyn CommandEvent {
 
 impl<C: Clone + Command + Sync> CommandEvent for C {
     fn trigger(&self, commands: &mut Commands) {
-        commands.add(self.clone())
+        commands.queue(self.clone())
     }
 }
 

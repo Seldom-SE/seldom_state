@@ -20,14 +20,9 @@ fn main() {
 const JUMP_VELOCITY: f32 = 500.;
 
 fn init(mut commands: Commands, asset_server: Res<AssetServer>) {
-    commands.spawn(Camera2dBundle::default());
+    commands.spawn(Camera2d);
 
     commands.spawn((
-        SpriteBundle {
-            transform: Transform::from_xyz(500., 0., 0.),
-            texture: asset_server.load("player.png"),
-            ..default()
-        },
         // From `leafwing-input-manager`
         InputManagerBundle {
             input_map: InputMap::default()
@@ -44,6 +39,7 @@ fn init(mut commands: Commands, asset_server: Res<AssetServer>) {
         // This state machine achieves a very rigid movement system. Consider a state machine for
         // whatever parts of your player controller that involve discrete states. Like the movement
         // in Castlevania and Celeste, and the attacks in a fighting game.
+        Grounded::Idle,
         StateMachine::default()
             // Whenever the player presses jump, jump
             .trans::<Grounded, _>(
@@ -62,7 +58,8 @@ fn init(mut commands: Commands, asset_server: Res<AssetServer>) {
                     _ => Grounded::Idle,
                 })
             }),
-        Grounded::Idle,
+        Sprite::from_image(asset_server.load("player.png")),
+        Transform::from_xyz(500., 0., 0.),
     ));
 }
 

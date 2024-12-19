@@ -38,17 +38,17 @@ pub struct Never {
 }
 
 /// Input requested by a trigger
-pub trait TriggerIn {
+pub trait TriggerIn: SystemInput {
     /// Convert an `Entity` to `Self`
-    fn from_entity(entity: Entity) -> Self;
+    fn from_entity(entity: Entity) -> Self::Inner<'static>;
 }
 
 impl TriggerIn for () {
-    fn from_entity(_: Entity) -> Self {}
+    fn from_entity(_: Entity) {}
 }
 
-impl TriggerIn for Entity {
-    fn from_entity(entity: Entity) -> Self {
+impl TriggerIn for In<Entity> {
+    fn from_entity(entity: Entity) -> Entity {
         entity
     }
 }
@@ -165,10 +165,10 @@ pub trait IntoTrigger<Marker>: Sized {
     }
 }
 
-impl<In, Out, Marker, T: IntoSystem<In, Out, Marker>> IntoTrigger<(In, Out, Marker)> for T
+impl<I, O, Marker, T: IntoSystem<I, O, Marker>> IntoTrigger<(I, O, Marker)> for T
 where
-    In: TriggerIn,
-    Out: TriggerOut,
+    I: TriggerIn,
+    O: TriggerOut,
     T::System: ReadOnlySystem,
 {
     type Trigger = SystemTrigger<T::System>;

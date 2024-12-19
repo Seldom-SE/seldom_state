@@ -15,17 +15,11 @@ fn main() {
 
 // Setup the game
 fn init(mut commands: Commands, asset_server: Res<AssetServer>) {
-    commands.spawn(Camera2dBundle::default());
+    commands.spawn(Camera2d);
 
     // Simple player entity
     let player = commands
-        .spawn((
-            SpriteBundle {
-                texture: asset_server.load("player.png"),
-                ..default()
-            },
-            Player,
-        ))
+        .spawn((Player, Sprite::from_image(asset_server.load("player.png"))))
         .id();
 
     // This is our trigger, which is a Bevy system that returns a `bool`, `Option`, or `Result`. We
@@ -52,11 +46,8 @@ fn init(mut commands: Commands, asset_server: Res<AssetServer>) {
 
     // The enemy
     commands.spawn((
-        SpriteBundle {
-            transform: Transform::from_xyz(500., 0., 0.),
-            texture: asset_server.load("enemy.png"),
-            ..default()
-        },
+        // The initial state is `Idle`
+        Idle,
         // This state machine handles the enemy's transitions. Transitions defined earlier have
         // priority, but triggers after the first accepted one may still be checked.
         StateMachine::default()
@@ -76,8 +67,8 @@ fn init(mut commands: Commands, asset_server: Res<AssetServer>) {
             .trans::<Follow, _>(near_player.not(), Idle)
             // Enable transition logging
             .set_trans_logging(true),
-        // The initial state is `Idle`
-        Idle,
+        Sprite::from_image(asset_server.load("enemy.png")),
+        Transform::from_xyz(500., 0., 0.),
     ));
 }
 

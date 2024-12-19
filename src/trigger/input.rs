@@ -1,8 +1,6 @@
 use std::{any::type_name, ops::Range};
 
-use leafwing_input_manager::{
-    action_state::ActionData, axislike::DualAxisData, orientation::Rotation,
-};
+use leafwing_input_manager::action_state::ActionData;
 
 use crate::prelude::*;
 
@@ -103,8 +101,8 @@ pub fn clamped_value_max(
 pub fn axis_pair<A: Actionlike>(
     action: A,
     length_bounds: Range<f32>,
-    rotation_bounds: Range<Rotation>,
-) -> impl EntityTrigger<Out = Result<DualAxisData, Option<DualAxisData>>> {
+    rotation_bounds: Range<Rot2>,
+) -> impl EntityTrigger<Out = Result<Vec2, Vec2>> {
     (move |In(entity): In<Entity>, actors: Query<&ActionState<A>>| {
         let axis_pair = actors
             .get(entity)
@@ -116,24 +114,19 @@ pub fn axis_pair<A: Actionlike>(
             })
             .axis_pair(&action);
 
-        axis_pair
-            .and_then(|axis_pair| {
-                let length = axis_pair.length();
-                let rotation = axis_pair.rotation();
+        let length = axis_pair.length();
+        let rotation = (length != 0.).then(|| Rot2::from(axis_pair.to_angle()));
 
-                (length_bounds.contains(&length)
-                    && rotation
-                        .map(|rotation| {
-                            if rotation_bounds.start < rotation_bounds.end {
-                                rotation >= rotation_bounds.start && rotation <= rotation_bounds.end
-                            } else {
-                                rotation >= rotation_bounds.start || rotation <= rotation_bounds.end
-                            }
-                        })
-                        .unwrap_or(true))
-                .then_some(axis_pair)
-            })
-            .ok_or(axis_pair)
+        (length_bounds.contains(&length)
+            && rotation
+                .map(|rotation| {
+                    let angle = rotation_bounds.start.angle_between(rotation_bounds.end);
+                    // @e test
+                    angle == 0. || rotation_bounds.start.angle_between(rotation) <= angle
+                })
+                .unwrap_or(true))
+        .then_some(axis_pair)
+        .ok_or(axis_pair)
     })
     .into_trigger()
 }
