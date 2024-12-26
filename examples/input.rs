@@ -50,13 +50,18 @@ fn init(mut commands: Commands, asset_server: Res<AssetServer>) {
             // When the player hits the ground, idle
             .trans::<Falling, _>(grounded, Grounded::Idle)
             // When the player is grounded, set their movement direction
-            .trans_builder(value_unbounded(Action::Move), |_: &Grounded, value| {
-                Some(match value {
-                    value if value > 0.5 => Grounded::Right,
-                    value if value < -0.5 => Grounded::Left,
-                    _ => Grounded::Idle,
-                })
-            }),
+            .trans_builder(
+                value_unbounded(Action::Move),
+                |trans: Trans<Grounded, _>| {
+                    let value = trans.out;
+
+                    match value {
+                        value if value > 0.5 => Grounded::Right,
+                        value if value < -0.5 => Grounded::Left,
+                        _ => Grounded::Idle,
+                    }
+                },
+            ),
         Sprite::from_image(asset_server.load("player.png")),
         Transform::from_xyz(500., 0., 0.),
     ));

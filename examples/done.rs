@@ -21,11 +21,9 @@ fn init(mut commands: Commands, asset_server: Res<AssetServer>) {
         Idle,
         StateMachine::default()
             // When the player clicks, go there
-            .trans_builder(click, |_: &AnyState, pos| {
-                Some(GoToSelection {
-                    speed: 200.,
-                    target: pos,
-                })
+            .trans_builder(click, |trans: Trans<AnyState, _>| GoToSelection {
+                speed: 200.,
+                target: trans.out,
             })
             // `done` triggers when the `Done` component is added to the entity. When they're done
             // going to the selection, idle.

@@ -1,3 +1,5 @@
+//! Module for the [`StateMachine`] component
+
 use std::{
     any::{type_name, Any, TypeId},
     fmt::Debug,
@@ -5,18 +7,14 @@ use std::{
 };
 
 use bevy::{
-    ecs::{
-        system::{EntityCommands, SystemState},
-        world::Command,
-    },
-    tasks::{ComputeTaskPool, ParallelSliceMut},
-    utils::HashMap,
+    ecs::{system::EntityCommands, world::Command},
+    utils::TypeIdMap,
 };
 
 use crate::{
     prelude::*,
     set::StateSet,
-    state::{Insert, OnEvent},
+    state::OnEvent,
     trigger::{IntoTrigger, TriggerOut},
 };
 
@@ -30,7 +28,11 @@ trait Transition: Debug + Send + Sync + 'static {
     fn init(&mut self, world: &mut World);
     /// Checks whether the transition should be taken. `entity` is the entity that contains the
     /// state machine.
-    fn check(&mut self, world: &World, entity: Entity) -> Option<(Box<dyn Insert>, TypeId)>;
+    fn check<'a>(
+        &'a mut self,
+        world: &World,
+        entity: Entity,
+    ) -> Option<(Box<dyn 'a + FnOnce(&mut World, TypeId)>, TypeId)>;
 }
 
 /// An edge in the state machine. The type parameters are the [`EntityTrigger`] that causes this
@@ -40,10 +42,7 @@ struct TransitionImpl<Trig, Prev, Build, Next>
 where
     Trig: EntityTrigger,
     Prev: EntityState,
-    Build: 'static
-        + Fn(&Prev, <<Trig as EntityTrigger>::Out as TriggerOut>::Ok) -> Option<Next>
-        + Send
-        + Sync,
+    Build: System<In = Trans<Prev, <Trig::Out as TriggerOut>::Ok>, Out = Next>,
     Next: Component + EntityState,
 {
     pub trigger: Trig,
@@ -55,8 +54,7 @@ impl<Trig, Prev, Build, Next> Debug for TransitionImpl<Trig, Prev, Build, Next>
 where
     Trig: EntityTrigger,
     Prev: EntityState,
-    Build:
-        Fn(&Prev, <<Trig as EntityTrigger>::Out as TriggerOut>::Ok) -> Option<Next> + Send + Sync,
+    Build: System<In = Trans<Prev, <Trig::Out as TriggerOut>::Ok>, Out = Next>,
     Next: Component + EntityState,
 {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
@@ -72,21 +70,33 @@ impl<Trig, Prev, Build, Next> Transition for TransitionImpl<Trig, Prev, Build, N
 where
     Trig: EntityTrigger,
     Prev: EntityState,
-    Build:
-        Fn(&Prev, <<Trig as EntityTrigger>::Out as TriggerOut>::Ok) -> Option<Next> + Send + Sync,
+    Build: System<In = Trans<Prev, <Trig::Out as TriggerOut>::Ok>, Out = Next>,
     Next: Component + EntityState,
 {
     fn init(&mut self, world: &mut World) {
         self.trigger.init(world);
+        self.builder.initialize(world);
     }
 
-    fn check(&mut self, world: &World, entity: Entity) -> Option<(Box<dyn Insert>, TypeId)> {
-        let Ok(res) = self.trigger.check(entity, world).into_result() else {
-            return None;
-        };
-
-        (self.builder)(Prev::from_entity(entity, world), res)
-            .map(|state| (Box::new(state) as Box<dyn Insert>, TypeId::of::<Next>()))
+    fn check<'a>(
+        &'a mut self,
+        world: &World,
+        entity: Entity,
+    ) -> Option<(Box<dyn 'a + FnOnce(&mut World, TypeId)>, TypeId)> {
+        self.trigger
+            .check(entity, world)
+            .into_result()
+            .map(|out| {
+                (
+                    Box::new(move |world: &mut World, curr: TypeId| {
+                        let prev = Prev::remove(entity, world, curr);
+                        let next = self.builder.run(TransCtx { prev, out, entity }, world);
+                        world.entity_mut(entity).insert(next);
+                    }) as Box<dyn 'a + FnOnce(&mut World, TypeId)>,
+                    TypeId::of::<Next>(),
+                )
+            })
+            .ok()
     }
 }
 
@@ -94,8 +104,7 @@ impl<Trig, Prev, Build, Next> TransitionImpl<Trig, Prev, Build, Next>
 where
     Trig: EntityTrigger,
     Prev: EntityState,
-    Build:
-        Fn(&Prev, <<Trig as EntityTrigger>::Out as TriggerOut>::Ok) -> Option<Next> + Send + Sync,
+    Build: System<In = Trans<Prev, <Trig::Out as TriggerOut>::Ok>, Out = Next>,
     Next: Component + EntityState,
 {
     pub fn new(trigger: Trig, builder: Build) -> Self {
@@ -106,6 +115,19 @@ where
         }
     }
 }
+
+/// Context for a transition
+pub struct TransCtx<Prev, Out> {
+    /// Previous state
+    pub prev: Prev,
+    /// Output from the trigger
+    pub out: Out,
+    /// The entity with this state machine
+    pub entity: Entity,
+}
+
+/// Context for a transition, usable as a `SystemInput`
+pub type Trans<Prev, Out> = In<TransCtx<Prev, Out>>;
 
 /// Information about a state
 #[derive(Debug)]
@@ -119,11 +141,9 @@ struct StateMetadata {
 impl StateMetadata {
     fn new<S: EntityState>() -> Self {
         Self {
-            name: type_name::<S>().to_owned(),
-            on_enter: default(),
-            on_exit: vec![OnEvent::Entity(Box::new(|entity: &mut EntityCommands| {
-                S::remove(entity);
-            }))],
+            name: type_name::<S>().to_string(),
+            on_enter: Vec::new(),
+            on_exit: Vec::new(),
         }
     }
 }
@@ -133,7 +153,7 @@ impl StateMetadata {
 /// `StateMachine::trans`, and other methods.
 #[derive(Component)]
 pub struct StateMachine {
-    states: HashMap<TypeId, StateMetadata>,
+    states: TypeIdMap<StateMetadata>,
     /// Each transition and the state it should apply in (or [`AnyState`]). We store the transitions
     /// in a flat list so that we ensure we always check them in the right order; storing them in
     /// each StateMetadata would mean that e.g. we'd have to check every AnyState trigger before any
@@ -147,16 +167,19 @@ pub struct StateMachine {
 
 impl Default for StateMachine {
     fn default() -> Self {
+        let mut states = TypeIdMap::default();
+        states.insert(
+            TypeId::of::<AnyState>(),
+            StateMetadata {
+                name: "AnyState".to_owned(),
+                on_enter: vec![],
+                on_exit: vec![],
+            },
+        );
+
         Self {
-            states: HashMap::from([(
-                TypeId::of::<AnyState>(),
-                StateMetadata {
-                    name: "AnyState".to_owned(),
-                    on_enter: vec![],
-                    on_exit: vec![],
-                },
-            )]),
-            transitions: vec![],
+            states,
+            transitions: Vec::new(),
             init_transitions: true,
             log_transitions: false,
         }
@@ -179,7 +202,7 @@ impl StateMachine {
         trigger: impl IntoTrigger<Marker>,
         state: impl Clone + Component,
     ) -> Self {
-        self.trans_builder(trigger, move |_: &S, _| Some(state.clone()))
+        self.trans_builder(trigger, move |_: Trans<S, _>| state.clone())
     }
 
     /// Get the metadata for the given state, creating it if necessary.
@@ -194,21 +217,25 @@ impl StateMachine {
     /// `Some(Next)`, the machine will transition to that `Next` state.
     pub fn trans_builder<
         Prev: EntityState,
-        Trig: IntoTrigger<Marker>,
+        Trig: IntoTrigger<TrigMarker>,
         Next: Clone + Component,
-        Marker,
+        TrigMarker,
+        BuildMarker,
     >(
         mut self,
         trigger: Trig,
-        builder: impl 'static
-            + Clone
-            + Fn(&Prev, <<Trig::Trigger as EntityTrigger>::Out as TriggerOut>::Ok) -> Option<Next>
-            + Send
-            + Sync,
+        builder: impl IntoSystem<
+            Trans<Prev, <<Trig::Trigger as EntityTrigger>::Out as TriggerOut>::Ok>,
+            Next,
+            BuildMarker,
+        >,
     ) -> Self {
         self.metadata_mut::<Prev>();
         self.metadata_mut::<Next>();
-        let transition = TransitionImpl::<_, Prev, _, _>::new(trigger.into_trigger(), builder);
+        let transition = TransitionImpl::<_, Prev, _, _>::new(
+            trigger.into_trigger(),
+            IntoSystem::into_system(builder),
+        );
         self.transitions.push((
             TypeId::of::<Prev>(),
             Box::new(transition) as Box<dyn Transition>,
@@ -288,22 +315,25 @@ impl StateMachine {
 
     /// Runs all transitions until one is actually taken. If one is taken, logs the transition and
     /// runs `on_enter/on_exit` triggers.
-    fn run(&mut self, world: &World, entity: Entity, commands: &mut Commands) {
+    // TODO Defer the actual transition so this can be parallelized, and see if that improves perf
+    fn run(&mut self, world: &mut World, entity: Entity) {
         let mut states = self.states.keys();
         let current = states.find(|&&state| world.entity(entity).contains_type_id(state));
 
         let Some(&current) = current else {
-            panic!("Entity {entity:?} is in no state");
+            error!("Entity {entity:?} is in no state");
+            return;
         };
 
         let from = &self.states[&current];
         if let Some(&other) = states.find(|&&state| world.entity(entity).contains_type_id(state)) {
             let state = &from.name;
             let other = &self.states[&other].name;
-            panic!("{entity:?} is in multiple states: {state} and {other}");
+            error!("{entity:?} is in multiple states: {state} and {other}");
+            return;
         }
 
-        let Some((insert, next_state)) = self
+        let Some((trans, next_state)) = self
             .transitions
             .iter_mut()
             .filter(|(type_id, _)| *type_id == current || *type_id == TypeId::of::<AnyState>())
@@ -314,12 +344,13 @@ impl StateMachine {
         let to = &self.states[&next_state];
 
         for event in from.on_exit.iter() {
-            event.trigger(entity, commands);
+            event.trigger(entity, &mut world.commands());
         }
 
-        insert.insert(&mut commands.entity(entity));
+        trans(world, current);
+
         for event in to.on_enter.iter() {
-            event.trigger(entity, commands);
+            event.trigger(entity, &mut world.commands());
         }
 
         if self.log_transitions {
@@ -342,9 +373,10 @@ impl StateMachine {
 }
 
 /// Runs all transitions on all entities.
+// There are comments here about parallelization, but this is not parallelized anymore. Leaving them
+// here in case it gets parallelized again.
 pub(crate) fn transition(
     world: &mut World,
-    system_state: &mut SystemState<ParallelCommands>,
     machine_query: &mut QueryState<(Entity, &mut StateMachine)>,
 ) {
     // Pull the machines out of the world so we can invoke mutable methods on them. The alternative
@@ -366,14 +398,13 @@ pub(crate) fn transition(
 
     // `world` is not mutated here; the state machines are not in the world, and the Commands don't
     // mutate until application
-    let par_commands = system_state.get(world);
-    let task_pool = ComputeTaskPool::get();
+    // let par_commands = system_state.get(world);
+    // let task_pool = ComputeTaskPool::get();
+
     // chunk size of None means to automatically pick
-    borrowed_machines.par_splat_map_mut(task_pool, None, |_, chunk| {
-        for (entity, machine) in chunk {
-            par_commands.command_scope(|mut commands| machine.run(world, *entity, &mut commands));
-        }
-    });
+    for &mut (entity, ref mut machine) in &mut borrowed_machines {
+        machine.run(world, entity);
+    }
 
     // put the borrowed machines back
     for (entity, machine) in borrowed_machines {
@@ -381,7 +412,7 @@ pub(crate) fn transition(
     }
 
     // necessary to actually *apply* the commands we've enqueued
-    system_state.apply(world);
+    // system_state.apply(world);
 }
 
 #[cfg(test)]

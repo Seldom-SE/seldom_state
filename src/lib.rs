@@ -4,7 +4,7 @@
 #![warn(missing_docs)]
 #![allow(clippy::type_complexity)]
 
-mod machine;
+pub mod machine;
 pub mod set;
 mod state;
 pub mod trigger;
@@ -38,7 +38,7 @@ pub mod prelude {
         value_unbounded,
     };
     pub use crate::{
-        machine::StateMachine,
+        machine::{StateMachine, Trans},
         state::{AnyState, EntityState},
         trigger::{always, done, on_event, Done, EntityTrigger, IntoTrigger, Never},
         StateMachinePlugin,

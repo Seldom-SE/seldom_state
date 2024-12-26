@@ -1,7 +1,4 @@
-use std::{
-    any::TypeId,
-    fmt::{self, Debug, Formatter},
-};
+use std::fmt::{self, Debug, Formatter};
 
 use bevy::ecs::{system::EntityCommands, world::Command};
 
@@ -10,31 +7,26 @@ use crate::prelude::*;
 use self::sealed::EntityStateSealed;
 
 mod sealed {
-    use bevy::ecs::system::EntityCommands;
+    use std::any::TypeId;
 
     use crate::prelude::*;
 
-    pub trait EntityStateSealed {
-        fn from_entity(entity: Entity, world: &World) -> &Self;
-        fn remove(entity: &mut EntityCommands);
+    pub trait EntityStateSealed: Sized {
+        fn remove(entity: Entity, world: &mut World, curr: TypeId) -> Self;
     }
 
     impl<T: Clone + Component> EntityStateSealed for T {
-        fn from_entity(entity: Entity, world: &World) -> &Self {
-            world.entity(entity).get().unwrap()
-        }
-
-        fn remove(entity: &mut EntityCommands) {
-            entity.remove::<Self>();
+        fn remove(entity: Entity, world: &mut World, _: TypeId) -> Self {
+            world.entity_mut(entity).take::<Self>().unwrap()
         }
     }
 
     impl EntityStateSealed for AnyState {
-        fn from_entity(_: Entity, _: &World) -> &Self {
-            &AnyState(())
+        fn remove(entity: Entity, world: &mut World, curr: TypeId) -> Self {
+            let curr = world.components().get_id(curr).unwrap();
+            world.entity_mut(entity).remove_by_id(curr);
+            AnyState(())
         }
-
-        fn remove(_: &mut EntityCommands) {}
     }
 }
 
@@ -52,17 +44,6 @@ impl<T: Clone + Component> EntityState for T {}
 pub struct AnyState(pub(crate) ());
 
 impl EntityState for AnyState {}
-
-pub(crate) trait Insert: Send {
-    fn insert(self: Box<Self>, entity: &mut EntityCommands) -> TypeId;
-}
-
-impl<S: Component> Insert for S {
-    fn insert(self: Box<Self>, entity: &mut EntityCommands) -> TypeId {
-        entity.insert(*self);
-        TypeId::of::<AnyState>()
-    }
-}
 
 #[derive(Debug)]
 pub(crate) enum OnEvent {
