@@ -6,7 +6,7 @@ use seldom_state::prelude::*;
 
 fn main() {
     App::new()
-        .add_plugins((DefaultPlugins, StateMachinePlugin))
+        .add_plugins((DefaultPlugins, StateMachinePlugin::default()))
         // This plugin is required for `seldom_state`
         .add_systems(Startup, init)
         .add_systems(Update, (follow, move_player))

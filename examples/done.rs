@@ -6,7 +6,7 @@ use seldom_state::prelude::*;
 
 fn main() {
     App::new()
-        .add_plugins((DefaultPlugins, StateMachinePlugin))
+        .add_plugins((DefaultPlugins, StateMachinePlugin::default()))
         .init_resource::<CursorPosition>()
         .add_systems(Startup, init)
         .add_systems(Update, (update_cursor_position, go_to_target))

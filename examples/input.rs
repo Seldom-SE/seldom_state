@@ -10,7 +10,7 @@ fn main() {
         .add_plugins((
             DefaultPlugins,
             InputManagerPlugin::<Action>::default(),
-            StateMachinePlugin,
+            StateMachinePlugin::default(),
         ))
         .add_systems(Startup, init)
         .add_systems(Update, (walk, fall))
