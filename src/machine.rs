@@ -7,7 +7,7 @@ use std::{
 };
 
 use bevy::{
-    ecs::{system::EntityCommands, world::Command},
+    ecs::{intern::Interned, schedule::ScheduleLabel, system::EntityCommands, world::Command},
     utils::TypeIdMap,
 };
 
@@ -18,8 +18,10 @@ use crate::{
     trigger::{IntoTrigger, TriggerOut},
 };
 
-pub(crate) fn plug(app: &mut App) {
-    app.add_systems(PostUpdate, transition.in_set(StateSet::Transition));
+pub(crate) fn plug(schedule: Interned<dyn ScheduleLabel>) -> impl Fn(&mut App) {
+    move |app| {
+        app.add_systems(schedule, transition.in_set(StateSet::Transition));
+    }
 }
 
 /// Performs a transition. We have a trait for this so we can erase [`TransitionImpl`]'s generics.

@@ -9,15 +9,34 @@ pub mod set;
 mod state;
 pub mod trigger;
 
+use bevy::ecs::{intern::Interned, schedule::ScheduleLabel};
 use prelude::*;
 
 /// Add to your app to use this crate
-#[derive(Debug, Default)]
-pub struct StateMachinePlugin;
+#[derive(Debug)]
+pub struct StateMachinePlugin {
+    schedule: Interned<dyn ScheduleLabel>,
+}
+
+impl Default for StateMachinePlugin {
+    fn default() -> Self {
+        Self {
+            schedule: PostUpdate.intern(),
+        }
+    }
+}
+
+impl StateMachinePlugin {
+    /// Sets the schedule in which `StateMachine`s are updated. Defaults to `PostUpdate`.
+    pub fn schedule(mut self, schedule: impl ScheduleLabel) -> Self {
+        self.schedule = schedule.intern();
+        self
+    }
+}
 
 impl Plugin for StateMachinePlugin {
     fn build(&self, app: &mut App) {
-        app.add_plugins((machine::plug, trigger::plug));
+        app.add_plugins((machine::plug(self.schedule), trigger::plug(self.schedule)));
     }
 }
 

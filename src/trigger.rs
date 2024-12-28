@@ -4,6 +4,7 @@
 #[cfg(feature = "leafwing_input")]
 mod input;
 
+use bevy::ecs::{intern::Interned, schedule::ScheduleLabel};
 use either::Either;
 #[cfg(feature = "leafwing_input")]
 pub use input::{
@@ -19,15 +20,17 @@ use std::{convert::Infallible, fmt::Debug};
 
 use crate::{prelude::*, set::StateSet};
 
-pub(crate) fn plug(app: &mut App) {
-    app.configure_sets(
-        PostUpdate,
-        StateSet::RemoveDoneMarkers.after(StateSet::Transition),
-    )
-    .add_systems(
-        PostUpdate,
-        remove_done_markers.in_set(StateSet::RemoveDoneMarkers),
-    );
+pub(crate) fn plug(schedule: Interned<dyn ScheduleLabel>) -> impl Fn(&mut App) {
+    move |app| {
+        app.configure_sets(
+            schedule,
+            StateSet::RemoveDoneMarkers.after(StateSet::Transition),
+        )
+        .add_systems(
+            schedule,
+            remove_done_markers.in_set(StateSet::RemoveDoneMarkers),
+        );
+    }
 }
 
 /// Wrapper for [`core::convert::Infallible`]. Use for [`EntityTrigger::Err`] if the trigger is
