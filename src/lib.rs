@@ -58,7 +58,7 @@ pub mod prelude {
     };
     pub use crate::{
         machine::{StateMachine, Trans},
-        state::{AnyState, EntityState},
+        state::{AnyState, EntityState, OneOfState},
         trigger::{always, done, on_event, Done, EntityTrigger, IntoTrigger, Never},
         StateMachinePlugin,
     };

@@ -26,6 +26,8 @@ pub(crate) fn plug(schedule: Interned<dyn ScheduleLabel>) -> impl Fn(&mut App) {
 
 /// Performs a transition. We have a trait for this so we can erase [`TransitionImpl`]'s generics.
 trait Transition: Debug + Send + Sync + 'static {
+    fn next_id(&self) -> TypeId;
+    fn add_descoped_component(&mut self, component: TypeId);
     /// Called before any call to `check`
     fn init(&mut self, world: &mut World);
     /// Checks whether the transition should be taken. `entity` is the entity that contains the
@@ -47,8 +49,10 @@ where
     Build: System<In = Trans<Prev, <Trig::Out as TriggerOut>::Ok>, Out = Next>,
     Next: Component + EntityState,
 {
-    pub trigger: Trig,
-    pub builder: Build,
+    trigger: Trig,
+    /// Components that should be cleaned up on this transition
+    descoped_components: Vec<TypeId>,
+    builder: Build,
     phantom: PhantomData<Prev>,
 }
 
@@ -75,6 +79,14 @@ where
     Build: System<In = Trans<Prev, <Trig::Out as TriggerOut>::Ok>, Out = Next>,
     Next: Component + EntityState,
 {
+    fn next_id(&self) -> TypeId {
+        TypeId::of::<Next>()
+    }
+
+    fn add_descoped_component(&mut self, component: TypeId) {
+        self.descoped_components.push(component);
+    }
+
     fn init(&mut self, world: &mut World) {
         self.trigger.init(world);
         self.builder.initialize(world);
@@ -92,6 +104,10 @@ where
                 (
                     Box::new(move |world: &mut World, curr: TypeId| {
                         let prev = Prev::remove(entity, world, curr);
+                        for &component in &self.descoped_components {
+                            let component = world.components().get_id(component).unwrap();
+                            world.entity_mut(entity).remove_by_id(component);
+                        }
                         let next = self.builder.run(TransCtx { prev, out, entity }, world);
                         world.entity_mut(entity).insert(next);
                     }) as Box<dyn 'a + FnOnce(&mut World, TypeId)>,
@@ -113,6 +129,7 @@ where
         Self {
             trigger,
             builder,
+            descoped_components: Vec::new(),
             phantom: PhantomData,
         }
     }
@@ -160,7 +177,10 @@ pub struct StateMachine {
     /// in a flat list so that we ensure we always check them in the right order; storing them in
     /// each StateMetadata would mean that e.g. we'd have to check every AnyState trigger before any
     /// state-specific trigger or vice versa.
-    transitions: Vec<(TypeId, Box<dyn Transition>)>,
+    transitions: Vec<(fn(TypeId) -> bool, Box<dyn Transition>)>,
+    /// See [`StateMachine::component_scope`]. This is used to populate transitions added in the
+    /// future, not to actually check on transition.
+    component_scopes: TypeIdMap<fn(TypeId) -> bool>,
     /// Transitions must be initialized whenever a transition is added or a transition occurs
     init_transitions: bool,
     /// If true, all transitions are logged at info level
@@ -182,6 +202,7 @@ impl Default for StateMachine {
         Self {
             states,
             transitions: Vec::new(),
+            component_scopes: default(),
             init_transitions: true,
             log_transitions: false,
         }
@@ -234,15 +255,30 @@ impl StateMachine {
     ) -> Self {
         self.metadata_mut::<Prev>();
         self.metadata_mut::<Next>();
-        let transition = TransitionImpl::<_, Prev, _, _>::new(
+        let mut transition = TransitionImpl::<_, Prev, _, _>::new(
             trigger.into_trigger(),
             IntoSystem::into_system(builder),
         );
-        self.transitions.push((
-            TypeId::of::<Prev>(),
-            Box::new(transition) as Box<dyn Transition>,
-        ));
+        for (&component, &matches) in &self.component_scopes {
+            if !matches(TypeId::of::<Next>()) {
+                transition.add_descoped_component(component);
+            }
+        }
+        self.transitions
+            .push((Prev::matches, Box::new(transition) as Box<dyn Transition>));
         self.init_transitions = true;
+        self
+    }
+
+    /// Scopes the given component type to the given states. When the entity transitions out of this
+    /// set of states, the component is removed. This is for automatic cleanup.
+    pub fn component_scope<S: EntityState, C: Component>(mut self) -> Self {
+        self.component_scopes.insert(TypeId::of::<C>(), S::matches);
+        for (_, transition) in &mut self.transitions {
+            if !S::matches(transition.next_id()) {
+                transition.add_descoped_component(TypeId::of::<C>());
+            }
+        }
         self
     }
 
@@ -338,7 +374,7 @@ impl StateMachine {
         let Some((trans, next_state)) = self
             .transitions
             .iter_mut()
-            .filter(|(type_id, _)| *type_id == current || *type_id == TypeId::of::<AnyState>())
+            .filter(|(matches, _)| matches(current))
             .find_map(|(_, transition)| transition.check(world, entity))
         else {
             return;
@@ -368,6 +404,7 @@ impl StateMachine {
         Self {
             states: default(),
             transitions: default(),
+            component_scopes: default(),
             init_transitions: false,
             log_transitions: false,
         }

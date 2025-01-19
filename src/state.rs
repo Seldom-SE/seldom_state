@@ -1,4 +1,7 @@
-use std::fmt::{self, Debug, Formatter};
+use std::{
+    fmt::{self, Debug, Formatter},
+    marker::PhantomData,
+};
 
 use bevy::ecs::{system::EntityCommands, world::Command};
 
@@ -7,21 +10,55 @@ use crate::prelude::*;
 use self::sealed::EntityStateSealed;
 
 mod sealed {
-    use std::any::TypeId;
+    use std::{any::TypeId, marker::PhantomData};
+
+    use bevy::utils::all_tuples;
 
     use crate::prelude::*;
 
     pub trait EntityStateSealed: Sized {
+        fn matches(state: TypeId) -> bool;
         fn remove(entity: Entity, world: &mut World, curr: TypeId) -> Self;
     }
 
     impl<T: Clone + Component> EntityStateSealed for T {
+        fn matches(state: TypeId) -> bool {
+            state == TypeId::of::<T>()
+        }
+
         fn remove(entity: Entity, world: &mut World, _: TypeId) -> Self {
             world.entity_mut(entity).take::<Self>().unwrap()
         }
     }
 
+    macro_rules! impl_entity_state_sealed {
+        ($($T:ident),*) => {
+            #[allow(unused)]
+            impl<$($T: EntityStateSealed),*> EntityStateSealed for OneOfState<($($T,)*)> {
+                fn matches(state: TypeId) -> bool {
+                    $($T::matches(state) ||)* false
+                }
+
+                fn remove(entity: Entity, world: &mut World, curr: TypeId) -> Self {
+                    $(
+                        if $T::matches(curr) {
+                            $T::remove(entity, world, curr);
+                        }
+                    )*
+
+                    Self(PhantomData)
+                }
+            }
+        };
+    }
+
+    all_tuples!(impl_entity_state_sealed, 0, 15, T);
+
     impl EntityStateSealed for AnyState {
+        fn matches(_: TypeId) -> bool {
+            true
+        }
+
         fn remove(entity: Entity, world: &mut World, curr: TypeId) -> Self {
             let curr = world.components().get_id(curr).unwrap();
             world.entity_mut(entity).remove_by_id(curr);
@@ -37,6 +74,13 @@ mod sealed {
 pub trait EntityState: 'static + Clone + Send + Sync + EntityStateSealed {}
 
 impl<T: Clone + Component> EntityState for T {}
+
+/// State that represents any of the states given in a tuple (ex
+/// `OneOfState<(Idle, Jump, Attack)>`).
+#[derive(Clone, Debug)]
+pub struct OneOfState<T>(pub(crate) PhantomData<T>);
+
+impl<T: 'static + Clone + Send + Sync> EntityState for OneOfState<T> where Self: EntityStateSealed {}
 
 /// State that represents any state. Transitions from [`AnyState`] may transition from any other
 /// state.

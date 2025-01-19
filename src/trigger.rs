@@ -148,6 +148,22 @@ pub trait IntoTrigger<Marker>: Sized {
         AndTrigger(self.into_trigger(), other.into_trigger())
     }
 
+    /// Combines these triggers by logical AND, discarding the output of the first. Do not override.
+    fn ignore_and<Marker2, T: IntoTrigger<Marker2>>(
+        self,
+        other: T,
+    ) -> impl EntityTrigger<
+        Out = Result<
+            <<T::Trigger as EntityTrigger>::Out as TriggerOut>::Ok,
+            Either<
+                <<Self::Trigger as EntityTrigger>::Out as TriggerOut>::Err,
+                <<T::Trigger as EntityTrigger>::Out as TriggerOut>::Err,
+            >,
+        >,
+    > {
+        IgnoreAndTrigger(self.into_trigger(), other.into_trigger())
+    }
+
     /// Combines these triggers by logical OR. Do not override.
     fn or<Marker2, T: IntoTrigger<Marker2>>(
         self,
@@ -274,6 +290,31 @@ impl<T: EntityTrigger, U: EntityTrigger> EntityTrigger for AndTrigger<T, U> {
                 .into_result()
                 .map_err(Either::Right)?,
         ))
+    }
+}
+
+/// Combines two triggers by logical AND, discarding the output of the first
+#[derive(Debug)]
+pub struct IgnoreAndTrigger<T: EntityTrigger, U: EntityTrigger>(pub T, pub U);
+
+impl<T: EntityTrigger, U: EntityTrigger> EntityTrigger for IgnoreAndTrigger<T, U> {
+    type Out = Result<
+        <U::Out as TriggerOut>::Ok,
+        Either<<T::Out as TriggerOut>::Err, <U::Out as TriggerOut>::Err>,
+    >;
+
+    fn init(&mut self, world: &mut World) {
+        let Self(t, u) = self;
+
+        t.init(world);
+        u.init(world);
+    }
+
+    fn check(&mut self, entity: Entity, world: &World) -> Self::Out {
+        let Self(t, u) = self;
+
+        t.check(entity, world).into_result().map_err(Either::Left)?;
+        u.check(entity, world).into_result().map_err(Either::Right)
     }
 }
 
