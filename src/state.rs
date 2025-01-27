@@ -14,6 +14,8 @@ mod sealed {
 
     use bevy::utils::all_tuples;
 
+    use super::AnyState;
+
     use crate::prelude::*;
 
     pub trait EntityStateSealed: Sized {
@@ -31,10 +33,22 @@ mod sealed {
         }
     }
 
+    impl<T: EntityState> EntityStateSealed for NotState<T> {
+        fn matches(state: TypeId) -> bool {
+            !T::matches(state)
+        }
+
+        fn remove(entity: Entity, world: &mut World, curr: TypeId) -> Self {
+            let curr = world.components().get_id(curr).unwrap();
+            world.entity_mut(entity).remove_by_id(curr);
+            Self(PhantomData)
+        }
+    }
+
     macro_rules! impl_entity_state_sealed {
         ($($T:ident),*) => {
             #[allow(unused)]
-            impl<$($T: EntityStateSealed),*> EntityStateSealed for OneOfState<($($T,)*)> {
+            impl<$($T: EntityState),*> EntityStateSealed for OneOfState<($($T,)*)> {
                 fn matches(state: TypeId) -> bool {
                     $($T::matches(state) ||)* false
                 }
@@ -75,17 +89,34 @@ pub trait EntityState: 'static + Clone + Send + Sync + EntityStateSealed {}
 
 impl<T: Clone + Component> EntityState for T {}
 
+/// State that represents any state other than the given state
+pub struct NotState<T>(PhantomData<T>);
+
+impl<T> Clone for NotState<T> {
+    fn clone(&self) -> Self {
+        Self(PhantomData)
+    }
+}
+
+impl<T: EntityState> EntityState for NotState<T> {}
+
 /// State that represents any of the states given in a tuple (ex
 /// `OneOfState<(Idle, Jump, Attack)>`).
-#[derive(Clone, Debug)]
-pub struct OneOfState<T>(pub(crate) PhantomData<T>);
+#[derive(Debug)]
+pub struct OneOfState<T>(PhantomData<T>);
 
-impl<T: 'static + Clone + Send + Sync> EntityState for OneOfState<T> where Self: EntityStateSealed {}
+impl<T> Clone for OneOfState<T> {
+    fn clone(&self) -> Self {
+        Self(PhantomData)
+    }
+}
+
+impl<T: 'static + Send + Sync> EntityState for OneOfState<T> where Self: EntityStateSealed {}
 
 /// State that represents any state. Transitions from [`AnyState`] may transition from any other
 /// state.
 #[derive(Clone, Debug)]
-pub struct AnyState(pub(crate) ());
+pub struct AnyState(());
 
 impl EntityState for AnyState {}
 

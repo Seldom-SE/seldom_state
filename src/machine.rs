@@ -26,8 +26,6 @@ pub(crate) fn plug(schedule: Interned<dyn ScheduleLabel>) -> impl Fn(&mut App) {
 
 /// Performs a transition. We have a trait for this so we can erase [`TransitionImpl`]'s generics.
 trait Transition: Debug + Send + Sync + 'static {
-    fn next_id(&self) -> TypeId;
-    fn add_descoped_component(&mut self, component: TypeId);
     /// Called before any call to `check`
     fn init(&mut self, world: &mut World);
     /// Checks whether the transition should be taken. `entity` is the entity that contains the
@@ -50,8 +48,6 @@ where
     Next: Component + EntityState,
 {
     trigger: Trig,
-    /// Components that should be cleaned up on this transition
-    descoped_components: Vec<TypeId>,
     builder: Build,
     phantom: PhantomData<Prev>,
 }
@@ -79,14 +75,6 @@ where
     Build: System<In = Trans<Prev, <Trig::Out as TriggerOut>::Ok>, Out = Next>,
     Next: Component + EntityState,
 {
-    fn next_id(&self) -> TypeId {
-        TypeId::of::<Next>()
-    }
-
-    fn add_descoped_component(&mut self, component: TypeId) {
-        self.descoped_components.push(component);
-    }
-
     fn init(&mut self, world: &mut World) {
         self.trigger.init(world);
         self.builder.initialize(world);
@@ -104,10 +92,6 @@ where
                 (
                     Box::new(move |world: &mut World, curr: TypeId| {
                         let prev = Prev::remove(entity, world, curr);
-                        for &component in &self.descoped_components {
-                            let component = world.components().get_id(component).unwrap();
-                            world.entity_mut(entity).remove_by_id(component);
-                        }
                         let next = self.builder.run(TransCtx { prev, out, entity }, world);
                         world.entity_mut(entity).insert(next);
                     }) as Box<dyn 'a + FnOnce(&mut World, TypeId)>,
@@ -129,7 +113,6 @@ where
         Self {
             trigger,
             builder,
-            descoped_components: Vec::new(),
             phantom: PhantomData,
         }
     }
@@ -153,16 +136,12 @@ pub type Trans<Prev, Out> = In<TransCtx<Prev, Out>>;
 struct StateMetadata {
     /// For debug information
     name: String,
-    on_enter: Vec<OnEvent>,
-    on_exit: Vec<OnEvent>,
 }
 
 impl StateMetadata {
     fn new<S: EntityState>() -> Self {
         Self {
             name: type_name::<S>().to_string(),
-            on_enter: Vec::new(),
-            on_exit: Vec::new(),
         }
     }
 }
@@ -178,9 +157,8 @@ pub struct StateMachine {
     /// each StateMetadata would mean that e.g. we'd have to check every AnyState trigger before any
     /// state-specific trigger or vice versa.
     transitions: Vec<(fn(TypeId) -> bool, Box<dyn Transition>)>,
-    /// See [`StateMachine::component_scope`]. This is used to populate transitions added in the
-    /// future, not to actually check on transition.
-    component_scopes: TypeIdMap<fn(TypeId) -> bool>,
+    on_exit: Vec<(fn(TypeId) -> bool, OnEvent)>,
+    on_enter: Vec<(fn(TypeId) -> bool, OnEvent)>,
     /// Transitions must be initialized whenever a transition is added or a transition occurs
     init_transitions: bool,
     /// If true, all transitions are logged at info level
@@ -189,20 +167,11 @@ pub struct StateMachine {
 
 impl Default for StateMachine {
     fn default() -> Self {
-        let mut states = TypeIdMap::default();
-        states.insert(
-            TypeId::of::<AnyState>(),
-            StateMetadata {
-                name: "AnyState".to_owned(),
-                on_enter: vec![],
-                on_exit: vec![],
-            },
-        );
-
         Self {
-            states,
+            states: default(),
             transitions: Vec::new(),
-            component_scopes: default(),
+            on_exit: Vec::new(),
+            on_enter: Vec::new(),
             init_transitions: true,
             log_transitions: false,
         }
@@ -255,15 +224,10 @@ impl StateMachine {
     ) -> Self {
         self.metadata_mut::<Prev>();
         self.metadata_mut::<Next>();
-        let mut transition = TransitionImpl::<_, Prev, _, _>::new(
+        let transition = TransitionImpl::<_, Prev, _, _>::new(
             trigger.into_trigger(),
             IntoSystem::into_system(builder),
         );
-        for (&component, &matches) in &self.component_scopes {
-            if !matches(TypeId::of::<Next>()) {
-                transition.add_descoped_component(component);
-            }
-        }
         self.transitions
             .push((Prev::matches, Box::new(transition) as Box<dyn Transition>));
         self.init_transitions = true;
@@ -272,14 +236,11 @@ impl StateMachine {
 
     /// Scopes the given component type to the given states. When the entity transitions out of this
     /// set of states, the component is removed. This is for automatic cleanup.
-    pub fn component_scope<S: EntityState, C: Component>(mut self) -> Self {
-        self.component_scopes.insert(TypeId::of::<C>(), S::matches);
-        for (_, transition) in &mut self.transitions {
-            if !S::matches(transition.next_id()) {
-                transition.add_descoped_component(TypeId::of::<C>());
-            }
-        }
-        self
+    // TODO Now that this is possible with `on_enter`, maybe remove here
+    pub fn component_scope<S: EntityState, C: Component>(self) -> Self {
+        self.on_enter::<NotState<S>>(|entity| {
+            entity.remove::<C>();
+        })
     }
 
     /// Adds an on-enter event to the state machine. Whenever the state machine transitions into the
@@ -288,9 +249,8 @@ impl StateMachine {
         mut self,
         on_enter: impl 'static + Fn(&mut EntityCommands) + Send + Sync,
     ) -> Self {
-        self.metadata_mut::<S>()
-            .on_enter
-            .push(OnEvent::Entity(Box::new(on_enter)));
+        self.on_enter
+            .push((S::matches, OnEvent::Entity(Box::new(on_enter))));
 
         self
     }
@@ -301,9 +261,8 @@ impl StateMachine {
         mut self,
         on_exit: impl 'static + Fn(&mut EntityCommands) + Send + Sync,
     ) -> Self {
-        self.metadata_mut::<S>()
-            .on_exit
-            .push(OnEvent::Entity(Box::new(on_exit)));
+        self.on_exit
+            .push((S::matches, OnEvent::Entity(Box::new(on_exit))));
 
         self
     }
@@ -314,9 +273,8 @@ impl StateMachine {
         mut self,
         command: impl Clone + Command + Sync,
     ) -> Self {
-        self.metadata_mut::<S>()
-            .on_enter
-            .push(OnEvent::Command(Box::new(command)));
+        self.on_enter
+            .push((S::matches, OnEvent::Command(Box::new(command))));
 
         self
     }
@@ -324,9 +282,8 @@ impl StateMachine {
     /// Adds an on-exit command to the state machine. Whenever the state machine transitions from
     /// the given state, it will run the command.
     pub fn command_on_exit<S: EntityState>(mut self, command: impl Clone + Command + Sync) -> Self {
-        self.metadata_mut::<S>()
-            .on_exit
-            .push(OnEvent::Command(Box::new(command)));
+        self.on_exit
+            .push((S::matches, OnEvent::Command(Box::new(command))));
 
         self
     }
@@ -381,14 +338,18 @@ impl StateMachine {
         };
         let to = &self.states[&next_state];
 
-        for event in from.on_exit.iter() {
-            event.trigger(entity, &mut world.commands());
+        for (matches, event) in &self.on_exit {
+            if matches(current) {
+                event.trigger(entity, &mut world.commands());
+            }
         }
 
         trans(world, current);
 
-        for event in to.on_enter.iter() {
-            event.trigger(entity, &mut world.commands());
+        for (matches, event) in &self.on_enter {
+            if matches(next_state) {
+                event.trigger(entity, &mut world.commands());
+            }
         }
 
         if self.log_transitions {
@@ -396,18 +357,6 @@ impl StateMachine {
         }
 
         self.init_transitions = true;
-    }
-
-    /// When running the transition system, we replace all StateMachines in the world with their
-    /// stub.
-    fn stub(&self) -> Self {
-        Self {
-            states: default(),
-            transitions: default(),
-            component_scopes: default(),
-            init_transitions: false,
-            log_transitions: false,
-        }
     }
 }
 
@@ -425,7 +374,7 @@ pub(crate) fn transition(
     let mut borrowed_machines: Vec<(Entity, StateMachine)> = machine_query
         .iter_mut(world)
         .map(|(entity, mut machine)| {
-            let stub = machine.stub();
+            let stub = StateMachine::default();
             (entity, std::mem::replace(machine.as_mut(), stub))
         })
         .collect();
@@ -536,5 +485,69 @@ mod tests {
             app.world().get::<StateOne>(entity).is_some(),
             "transitioning from a state to itself should work"
         );
+    }
+
+    #[test]
+    fn test_state_machine() {
+        #[derive(Resource, Default)]
+        struct Test {
+            on_b: bool,
+            on_any: bool,
+        }
+
+        #[derive(Clone, Debug)]
+        struct MyCommand {
+            on_any: bool,
+        }
+
+        impl Command for MyCommand {
+            fn apply(self, world: &mut World) {
+                let mut test = world.resource_mut::<Test>();
+                if self.on_any {
+                    test.on_any = true;
+                } else {
+                    test.on_b = true;
+                }
+            }
+        }
+
+        #[derive(Component, Clone)]
+        struct A;
+        #[derive(Component, Clone)]
+        struct B;
+        #[derive(Component, Clone)]
+        struct C;
+        #[derive(Component, Clone)]
+        struct D;
+
+        let mut app = App::new();
+        app.init_resource::<Test>();
+        app.add_plugins((
+            MinimalPlugins,
+            bevy::log::LogPlugin::default(),
+            StateMachinePlugin::default(),
+        ));
+        app.update();
+
+        let machine = StateMachine::default()
+            .trans::<A, _>(always, B)
+            .trans::<B, _>(always, C)
+            .trans::<C, _>(always, D)
+            .command_on_enter::<B>(MyCommand { on_any: false })
+            .command_on_enter::<AnyState>(MyCommand { on_any: true })
+            .set_trans_logging(true);
+
+        let id = app.world_mut().spawn((A, machine)).id();
+        app.update();
+        app.update();
+        app.update();
+        assert!(app.world().get::<A>(id).is_none());
+        assert!(app.world().get::<B>(id).is_none());
+        assert!(app.world().get::<C>(id).is_none());
+        assert!(app.world().get::<D>(id).is_some());
+
+        let test = app.world().resource::<Test>();
+        assert!(test.on_b, "on_b should be true");
+        assert!(test.on_any, "on_any should be true");
     }
 }
