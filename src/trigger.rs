@@ -99,6 +99,8 @@ impl<Ok, Err> TriggerOut for Result<Ok, Err> {
     }
 }
 
+/// Conversion trait to turn something into an [`EntityTrigger`].
+///
 /// Automatically implemented for types that implement [`EntityTrigger`] and certain types that
 /// implement
 /// [`IntoSystem`]. Types that implement [`IntoSystem`] don't automatically implement

@@ -146,7 +146,9 @@ impl StateMetadata {
     }
 }
 
-/// State machine component. Entities with this component will have components (the states) added
+/// State machine component.
+///
+/// Entities with this component will have components (the states) added
 /// and removed based on the transitions that you add. Build one with `StateMachine::default`,
 /// `StateMachine::trans`, and other methods.
 #[derive(Component)]

@@ -95,7 +95,9 @@ pub fn clamped_value_max(
 }
 
 /// Trigger that transitions if the given [`Actionlike`]'s [`DualAxisData`] is within the given
-/// bounds. If no minimum length is necessary, use `0.`. To exclude specifically neutral axis pairs,
+/// bounds.
+///
+/// If no minimum length is necessary, use `0.`. To exclude specifically neutral axis pairs,
 /// use a small positive value. If no maximum length is necessary, use `f32::INFINITY`, or similar.
 /// If rotation bounds are not necessary, use the same value for the minimum and maximum ex.
 /// `Dir2::Y..Dir2::Y`.
