@@ -397,8 +397,13 @@ pub(crate) fn transition(
     }
 
     // put the borrowed machines back
-    for (entity, machine) in borrowed_machines {
-        *machine_query.get_mut(world, entity).unwrap().1 = machine;
+    for (entity, borrowed_machine) in borrowed_machines {
+        let Ok((_, mut machine)) = machine_query.get_mut(world, entity) else {
+            // The `StateMachine` component was removed in a transition
+            continue;
+        };
+
+        *machine = borrowed_machine;
     }
 
     // necessary to actually *apply* the commands we've enqueued
