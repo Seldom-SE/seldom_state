@@ -239,9 +239,9 @@ impl StateMachine {
     /// Scopes the given component type to the given states. When the entity transitions out of this
     /// set of states, the component is removed. This is for automatic cleanup.
     // TODO Now that this is possible with `on_enter`, maybe remove here
-    pub fn component_scope<S: EntityState, C: Component>(self) -> Self {
+    pub fn scope_components<S: EntityState, B: Bundle>(self) -> Self {
         self.on_enter::<NotState<S>>(|entity| {
-            entity.remove::<C>();
+            entity.remove::<B>();
         })
     }
 
