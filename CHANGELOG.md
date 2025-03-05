@@ -1,10 +1,29 @@
 # Changelog
 
+## 0.13 (2024-03-05)
+
+### Added
+
+- `OneOfState` is a state that matches any state given in the tuple in its type parameter
+- `NotState` is a state that matches any state other than the one given in its type parameter
+- `Trigger::ignore_and` is like `Trigger::and`, but throws away the output of the first trigger
+- `StateMachinePlugin::schedule` changes the schedule in which transitions occur
+
+### Changed
+
+- The behavior of `StateMachine::trans_builder` has changed. Now, builders can no longer reject a
+transition (instead of returning `Option<MyState>`, they return `MyState`). Instead, builders are
+now mutable systems that accept `Trans` (context for the transition) as an input.
+
+### Fixed
+
+- Fixed a panic when `StateMachine` is removed during a transition
+
 ## 0.12 (2024-12-18)
 
 ### Changed
 
-- Updated `bevy` to 0.14
+- Updated `bevy` to 0.15
 - Updated `leafwing-input-manager` to 0.16 (see their `RELEASES.md` for a migration guide)
 
 ## 0.11 (2024-07-09)

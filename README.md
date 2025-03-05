@@ -57,6 +57,7 @@ improvement, feel free to submit an issue or pr!
     - Bevy's [built-in run conditions](https://docs.rs/bevy/latest/bevy/ecs/schedule/common_conditions/index.html)
     also work as triggers
 - `AnyState` state, that can be used in type parameters to represent any state
+- `OneOfState` and `NotState` states, which can be used in type parameters to match groups of states
 - Transition builders that allow dataflow from outgoing states and triggers to incoming states
 (`StateMachine::trans_builder`)
 - Automatically perform behavior upon entering or exiting states (`StateMachine::on_enter`,
@@ -149,7 +150,7 @@ See the `chase.rs` example for further usage.
 
 | Bevy | `leafwing-input-manager` | `seldom_state` |
 | ---- | ------------------------ | -------------- |
-| 0.15 | 0.16                     | 0.12           |
+| 0.15 | 0.16                     | 0.12 - 0.13    |
 | 0.14 | 0.14                     | 0.11           |
 | 0.13 | 0.13                     | 0.10           |
 | 0.12 | 0.11                     | 0.8 - 0.9      |
