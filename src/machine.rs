@@ -441,7 +441,10 @@ mod tests {
         app.add_systems(Update, transition);
 
         let machine = StateMachine::default()
-            .trans::<StateOne, _>(always, StateTwo)
+            .trans::<StateOne, _>(
+                Box::new(always.into_trigger()) as Box<dyn EntityTrigger<Out = _>>,
+                StateTwo,
+            )
             .trans::<StateTwo, _>(resource_present, StateThree);
         let entity = app.world_mut().spawn((machine, StateOne)).id();
 

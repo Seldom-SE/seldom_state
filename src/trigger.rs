@@ -201,7 +201,7 @@ where
 
 /// Types that implement this may be used in [`StateMachine`]s to transition from one state to
 /// another. Look at an example for implementing this trait, since it can be tricky.
-pub trait EntityTrigger: 'static + Send + Sized + Sync {
+pub trait EntityTrigger: 'static + Send + Sync {
     /// The trigger's output. See [`TriggerOut`].
     type Out: TriggerOut;
 
@@ -216,6 +216,18 @@ impl<T: EntityTrigger> IntoTrigger<()> for T {
 
     fn into_trigger(self) -> T {
         self
+    }
+}
+
+impl<O: 'static + TriggerOut> EntityTrigger for Box<dyn EntityTrigger<Out = O>> {
+    type Out = O;
+
+    fn init(&mut self, world: &mut World) {
+        (**self).init(world);
+    }
+
+    fn check(&mut self, entity: Entity, world: &World) -> Self::Out {
+        (**self).check(entity, world)
     }
 }
 
