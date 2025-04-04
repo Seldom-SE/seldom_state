@@ -159,8 +159,8 @@ pub struct StateMachine {
     /// each StateMetadata would mean that e.g. we'd have to check every AnyState trigger before any
     /// state-specific trigger or vice versa.
     transitions: Vec<(fn(TypeId) -> bool, Box<dyn Transition>)>,
-    on_exit: Vec<(fn(TypeId) -> bool, OnEvent)>,
-    on_enter: Vec<(fn(TypeId) -> bool, OnEvent)>,
+    on_exit: Vec<(fn(TypeId) -> bool, fn(TypeId) -> bool, OnEvent)>,
+    on_enter: Vec<(fn(TypeId) -> bool, fn(TypeId) -> bool, OnEvent)>,
     /// Transitions must be initialized whenever a transition is added or a transition occurs
     init_transitions: bool,
     /// If true, all transitions are logged at info level
@@ -236,47 +236,62 @@ impl StateMachine {
         self
     }
 
-    /// Adds an on-enter event to the state machine. Whenever the state machine transitions into the
-    /// given state, it will run the event.
-    pub fn on_enter<S: EntityState>(
+    /// Adds an on-enter event to the state machine. Whenever the state machine transitions to the
+    /// given next state from the given current state, it will run the event.
+    pub fn on_enter<NextState: EntityState, CurrentState: EntityState>(
         mut self,
         on_enter: impl 'static + Fn(&mut EntityCommands) + Send + Sync,
     ) -> Self {
-        self.on_enter
-            .push((S::matches, OnEvent::Entity(Box::new(on_enter))));
+        self.on_enter.push((
+            NextState::matches,
+            CurrentState::matches,
+            OnEvent::Entity(Box::new(on_enter)),
+        ));
 
         self
     }
 
     /// Adds an on-exit event to the state machine. Whenever the state machine transitions from the
-    /// given state, it will run the event.
-    pub fn on_exit<S: EntityState>(
+    /// given current state to the given next state, it will run the event.
+    pub fn on_exit<CurrentState: EntityState, NextState: EntityState>(
         mut self,
         on_exit: impl 'static + Fn(&mut EntityCommands) + Send + Sync,
     ) -> Self {
-        self.on_exit
-            .push((S::matches, OnEvent::Entity(Box::new(on_exit))));
+        self.on_exit.push((
+            CurrentState::matches,
+            NextState::matches,
+            OnEvent::Entity(Box::new(on_exit)),
+        ));
 
         self
     }
 
-    /// Adds an on-enter command to the state machine. Whenever the state machine transitions into
-    /// the given state, it will run the command.
-    pub fn command_on_enter<S: EntityState>(
+    /// Adds an on-enter command to the state machine. Whenever the state machine transitions from the
+    /// given next state from the given current state, it will run the command.
+    pub fn command_on_enter<NextState: EntityState, CurrentState: EntityState>(
         mut self,
         command: impl Clone + Command + Sync,
     ) -> Self {
-        self.on_enter
-            .push((S::matches, OnEvent::Command(Box::new(command))));
+        self.on_enter.push((
+            NextState::matches,
+            CurrentState::matches,
+            OnEvent::Command(Box::new(command)),
+        ));
 
         self
     }
 
-    /// Adds an on-exit command to the state machine. Whenever the state machine transitions from
-    /// the given state, it will run the command.
-    pub fn command_on_exit<S: EntityState>(mut self, command: impl Clone + Command + Sync) -> Self {
-        self.on_exit
-            .push((S::matches, OnEvent::Command(Box::new(command))));
+    /// Adds an on-exit command to the state machine. Whenever the state machine transitions from the
+    /// given curent stateto the given next state, it will run the command.
+    pub fn command_on_exit<CurrentState: EntityState, NextState: EntityState>(
+        mut self,
+        command: impl Clone + Command + Sync,
+    ) -> Self {
+        self.on_exit.push((
+            CurrentState::matches,
+            NextState::matches,
+            OnEvent::Command(Box::new(command)),
+        ));
 
         self
     }
@@ -331,16 +346,16 @@ impl StateMachine {
         };
         let to = &self.states[&next_state];
 
-        for (matches, event) in &self.on_exit {
-            if matches(current) {
+        for (matches_current, matches_next, event) in &self.on_exit {
+            if matches_current(current) && matches_next(next_state) {
                 event.trigger(entity, &mut world.commands());
             }
         }
 
         trans(world, current);
 
-        for (matches, event) in &self.on_enter {
-            if matches(next_state) {
+        for (matches_next, matches_current, event) in &self.on_enter {
+            if matches_next(next_state) && matches_current(current) {
                 event.trigger(entity, &mut world.commands());
             }
         }
@@ -534,8 +549,8 @@ mod tests {
             .trans::<A, _>(always, B)
             .trans::<B, _>(always, C)
             .trans::<C, _>(always, D)
-            .command_on_enter::<B>(MyCommand { on_any: false })
-            .command_on_enter::<AnyState>(MyCommand { on_any: true })
+            .command_on_enter::<B, AnyState>(MyCommand { on_any: false })
+            .command_on_enter::<AnyState, AnyState>(MyCommand { on_any: true })
             .set_trans_logging(true);
 
         let id = app.world_mut().spawn((A, machine)).id();
@@ -550,5 +565,53 @@ mod tests {
         let test = app.world().resource::<Test>();
         assert!(test.on_b, "on_b should be true");
         assert!(test.on_any, "on_any should be true");
+    }
+
+    #[test]
+    fn test_event_matches() {
+        #[derive(Component, Default)]
+        struct InB;
+
+        #[derive(Component, Clone)]
+        struct A;
+
+        #[derive(Component, Clone)]
+        struct B1;
+
+        #[derive(Component, Clone)]
+        struct B2;
+
+        #[derive(Component, Clone)]
+        struct C;
+
+        let mut app = App::new();
+        app.add_plugins((
+            MinimalPlugins,
+            bevy::log::LogPlugin::default(),
+            StateMachinePlugin::default(),
+        ));
+        app.update();
+
+        let machine = StateMachine::default()
+            .trans::<A, _>(always, B1)
+            .trans::<B1, _>(always, B2)
+            .trans::<B2, _>(always, C)
+            .on_enter::<OneOfState<(B1, B2)>, NotState<OneOfState<(B1, B2)>>>(|ec| {
+                ec.insert(InB);
+            })
+            .on_exit::<OneOfState<(B1, B2)>, NotState<OneOfState<(B1, B2)>>>(|ec| {
+                ec.remove::<InB>();
+            })
+            .set_trans_logging(true);
+
+        let id = app.world_mut().spawn((A, machine)).id();
+        app.update();
+        assert!(app.world().get::<InB>(id).is_some());
+
+        app.update();
+        assert!(app.world().get::<InB>(id).is_some());
+
+        app.update();
+        assert!(app.world().get::<InB>(id).is_none());
     }
 }

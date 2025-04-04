@@ -190,8 +190,12 @@ mod tests {
 
         let machine = StateMachine::default()
             .trans::<StateOne, _>(always, StateTwo)
-            .on_exit::<StateOne>(|commands| commands.commands().insert_resource(SomeResource))
-            .on_enter::<StateTwo>(|commands| commands.commands().insert_resource(AnotherResource));
+            .on_exit::<StateOne, AnyState>(|commands| {
+                commands.commands().insert_resource(SomeResource)
+            })
+            .on_enter::<StateTwo, AnyState>(|commands| {
+                commands.commands().insert_resource(AnotherResource)
+            });
 
         let entity = app.world_mut().spawn((machine, StateOne)).id();
         assert!(app.world().get::<StateOne>(entity).is_some());
