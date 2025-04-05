@@ -3,8 +3,6 @@ use std::{
     marker::PhantomData,
 };
 
-use bevy::ecs::{system::EntityCommands, world::Command};
-
 use crate::prelude::*;
 
 use self::sealed::EntityStateSealed;
@@ -12,7 +10,7 @@ use self::sealed::EntityStateSealed;
 mod sealed {
     use std::{any::TypeId, marker::PhantomData};
 
-    use bevy::utils::all_tuples;
+    use variadics_please::all_tuples;
 
     use super::AnyState;
 

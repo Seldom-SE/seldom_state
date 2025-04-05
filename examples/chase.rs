@@ -145,8 +145,8 @@ fn move_player(
     mut players: Query<&mut Transform, With<Player>>,
     keys: Res<ButtonInput<KeyCode>>,
     time: Res<Time>,
-) {
-    players.single_mut().translation += Vec3::new(
+) -> Result {
+    players.single_mut()?.translation += Vec3::new(
         (keys.pressed(KeyCode::ArrowRight) as i32 - keys.pressed(KeyCode::ArrowLeft) as i32) as f32,
         (keys.pressed(KeyCode::ArrowUp) as i32 - keys.pressed(KeyCode::ArrowDown) as i32) as f32,
         0.,
@@ -154,4 +154,6 @@ fn move_player(
     .normalize_or_zero()
         * PLAYER_SPEED
         * time.delta_secs();
+
+    Ok(())
 }

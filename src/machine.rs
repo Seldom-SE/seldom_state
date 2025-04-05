@@ -6,10 +6,8 @@ use std::{
     marker::PhantomData,
 };
 
-use bevy::{
-    ecs::{intern::Interned, schedule::ScheduleLabel, system::EntityCommands, world::Command},
-    utils::TypeIdMap,
-};
+use bevy_ecs::{intern::Interned, schedule::ScheduleLabel};
+use bevy_utils::TypeIdMap;
 
 use crate::{
     prelude::*,
@@ -403,6 +401,8 @@ pub(crate) fn transition(
 
 #[cfg(test)]
 mod tests {
+    use bevy::prelude::*;
+
     use super::*;
 
     // Test states to transition between.

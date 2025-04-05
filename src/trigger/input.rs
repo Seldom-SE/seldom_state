@@ -1,6 +1,6 @@
 use std::{any::type_name, ops::Range};
 
-use bevy::math::InvalidDirectionError;
+use bevy_math::InvalidDirectionError;
 use leafwing_input_manager::action_state::ActionData;
 
 use crate::prelude::*;

@@ -9,7 +9,7 @@ pub mod set;
 mod state;
 pub mod trigger;
 
-use bevy::ecs::{intern::Interned, schedule::ScheduleLabel};
+use bevy_ecs::{intern::Interned, schedule::ScheduleLabel};
 use prelude::*;
 
 /// Add to your app to use this crate
@@ -42,7 +42,12 @@ impl Plugin for StateMachinePlugin {
 
 /// Module for convenient imports. Use with `use seldom_state::prelude::*;`.
 pub mod prelude {
-    pub(crate) use bevy::prelude::*;
+    pub(crate) use bevy_app::prelude::*;
+    pub(crate) use bevy_ecs::prelude::*;
+    pub(crate) use bevy_log::prelude::*;
+    #[allow(unused)]
+    pub(crate) use bevy_math::prelude::*;
+    pub(crate) use bevy_utils::prelude::*;
     #[cfg(feature = "leafwing_input")]
     pub(crate) use leafwing_input_manager::prelude::*;
 

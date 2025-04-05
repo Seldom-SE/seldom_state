@@ -89,10 +89,12 @@ fn update_cursor_position(
     cameras: Query<(&Camera, &GlobalTransform)>,
     windows: Query<&Window>,
     mut position: ResMut<CursorPosition>,
-) {
-    let (camera, transform) = cameras.single();
+) -> Result {
+    let (camera, transform) = cameras.single()?;
     **position = windows
-        .single()
+        .single()?
         .cursor_position()
         .and_then(|cursor_position| camera.viewport_to_world_2d(transform, cursor_position).ok());
+
+    Ok(())
 }

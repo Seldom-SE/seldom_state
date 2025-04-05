@@ -4,7 +4,8 @@
 #[cfg(feature = "leafwing_input")]
 mod input;
 
-use bevy::ecs::{intern::Interned, schedule::ScheduleLabel};
+use bevy_derive::{Deref, DerefMut};
+use bevy_ecs::{intern::Interned, schedule::ScheduleLabel};
 use either::Either;
 #[cfg(feature = "leafwing_input")]
 pub use input::{
