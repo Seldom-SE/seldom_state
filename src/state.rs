@@ -7,7 +7,7 @@ use crate::prelude::*;
 
 use self::sealed::EntityStateSealed;
 
-mod sealed {
+pub(crate) mod sealed {
     use std::{any::TypeId, marker::PhantomData};
 
     use variadics_please::all_tuples;
