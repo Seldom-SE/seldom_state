@@ -236,64 +236,94 @@ impl StateMachine {
         self
     }
 
-    /// Adds an on-enter event to the state machine. Whenever the state machine transitions to the
-    /// given next state from the given current state, it will run the event.
-    pub fn on_enter<NextState: EntityState, CurrentState: EntityState>(
+    /// Adds an on-enter event to the state machine. Whenever the state machine transitions
+    /// from the given previous state to the given next state, it will run the event.
+    pub fn on_enter_to<Prev: EntityState, Next: EntityState>(
         mut self,
         on_enter: impl 'static + Fn(&mut EntityCommands) + Send + Sync,
     ) -> Self {
         self.on_enter.push((
-            NextState::matches,
-            CurrentState::matches,
+            Prev::matches,
+            Next::matches,
             OnEvent::Entity(Box::new(on_enter)),
         ));
 
         self
     }
 
-    /// Adds an on-exit event to the state machine. Whenever the state machine transitions from the
-    /// given current state to the given next state, it will run the event.
-    pub fn on_exit<CurrentState: EntityState, NextState: EntityState>(
+    /// Adds an on-enter event to the state machine. Whenever the state machine transitions
+    /// from any previous state to the given next state, it will run the event.
+    pub fn on_enter<Next: EntityState>(
+        self,
+        on_enter: impl 'static + Fn(&mut EntityCommands) + Send + Sync,
+    ) -> Self {
+        self.on_enter_to::<AnyState, Next>(on_enter)
+    }
+
+    /// Adds an on-enter event to the state machine. Whenever the state machine transitions
+    /// from the given previous state to the given next state, it will run the event.
+    pub fn on_exit_from<Prev: EntityState, Next: EntityState>(
         mut self,
         on_exit: impl 'static + Fn(&mut EntityCommands) + Send + Sync,
     ) -> Self {
         self.on_exit.push((
-            CurrentState::matches,
-            NextState::matches,
+            Prev::matches,
+            Next::matches,
             OnEvent::Entity(Box::new(on_exit)),
         ));
 
         self
     }
 
-    /// Adds an on-enter command to the state machine. Whenever the state machine transitions from the
-    /// given next state from the given current state, it will run the command.
-    pub fn command_on_enter<NextState: EntityState, CurrentState: EntityState>(
+    /// Adds an on-exit event to the state machine. Whenever the state machine transitions
+    /// from the given previous state to any next state, it will run the event.
+    pub fn on_exit<Prev: EntityState>(
+        self,
+        on_exit: impl 'static + Fn(&mut EntityCommands) + Send + Sync,
+    ) -> Self {
+        self.on_exit_from::<Prev, AnyState>(on_exit)
+    }
+
+    /// Adds an on-enter command to the state machine. Whenever the state machine transitions
+    /// from the given previous state to the given next state, it will run the command.
+    pub fn command_on_enter_to<Prev: EntityState, Next: EntityState>(
         mut self,
         command: impl Clone + Command + Sync,
     ) -> Self {
         self.on_enter.push((
-            NextState::matches,
-            CurrentState::matches,
+            Prev::matches,
+            Next::matches,
             OnEvent::Command(Box::new(command)),
         ));
 
         self
     }
 
-    /// Adds an on-exit command to the state machine. Whenever the state machine transitions from the
-    /// given curent stateto the given next state, it will run the command.
-    pub fn command_on_exit<CurrentState: EntityState, NextState: EntityState>(
+    /// Adds an on-enter command to the state machine. Whenever the state machine transitions
+    /// from any previous state to the given next state, it will run the command.
+    pub fn command_on_enter<Next: EntityState>(self, command: impl Clone + Command + Sync) -> Self {
+        self.command_on_enter_to::<AnyState, Next>(command)
+    }
+
+    /// Adds an on-exit command to the state machine. Whenever the state machine transitions
+    /// from the given previous state to the given next state, it will run the command.
+    pub fn command_on_exit_from<Prev: EntityState, Next: EntityState>(
         mut self,
         command: impl Clone + Command + Sync,
     ) -> Self {
         self.on_exit.push((
-            CurrentState::matches,
-            NextState::matches,
+            Prev::matches,
+            Next::matches,
             OnEvent::Command(Box::new(command)),
         ));
 
         self
+    }
+
+    /// Adds an on-exit command to the state machine. Whenever the state machine transitions
+    /// from the given previous state to any next state, it will run the command.
+    pub fn command_on_exit<Prev: EntityState>(self, command: impl Clone + Command + Sync) -> Self {
+        self.command_on_exit_from::<Prev, AnyState>(command)
     }
 
     /// Sets whether transitions are logged to the console
@@ -354,8 +384,8 @@ impl StateMachine {
 
         trans(world, current);
 
-        for (matches_next, matches_current, event) in &self.on_enter {
-            if matches_next(next_state) && matches_current(current) {
+        for (matches_current, matches_next, event) in &self.on_enter {
+            if matches_current(current) && matches_next(next_state) {
                 event.trigger(entity, &mut world.commands());
             }
         }
@@ -549,8 +579,8 @@ mod tests {
             .trans::<A, _>(always, B)
             .trans::<B, _>(always, C)
             .trans::<C, _>(always, D)
-            .command_on_enter::<B, AnyState>(MyCommand { on_any: false })
-            .command_on_enter::<AnyState, AnyState>(MyCommand { on_any: true })
+            .command_on_enter::<B>(MyCommand { on_any: false })
+            .command_on_enter::<AnyState>(MyCommand { on_any: true })
             .set_trans_logging(true);
 
         let id = app.world_mut().spawn((A, machine)).id();
@@ -596,10 +626,10 @@ mod tests {
             .trans::<A, _>(always, B1)
             .trans::<B1, _>(always, B2)
             .trans::<B2, _>(always, C)
-            .on_enter::<OneOfState<(B1, B2)>, NotState<OneOfState<(B1, B2)>>>(|ec| {
+            .on_enter_to::<NotState<OneOfState<(B1, B2)>>, OneOfState<(B1, B2)>>(|ec| {
                 ec.insert(InB);
             })
-            .on_exit::<OneOfState<(B1, B2)>, NotState<OneOfState<(B1, B2)>>>(|ec| {
+            .on_exit_from::<OneOfState<(B1, B2)>, NotState<OneOfState<(B1, B2)>>>(|ec| {
                 ec.remove::<InB>();
             })
             .set_trans_logging(true);
@@ -613,5 +643,70 @@ mod tests {
 
         app.update();
         assert!(app.world().get::<InB>(id).is_none());
+    }
+
+    #[test]
+    fn test_command_event_matches() {
+        #[derive(Resource, Default)]
+        struct InBResource;
+
+        #[derive(Clone, Debug)]
+        struct InitInBResourceCommand;
+
+        impl Command for InitInBResourceCommand {
+            fn apply(self, world: &mut World) {
+                world.init_resource::<InBResource>();
+            }
+        }
+
+        #[derive(Clone, Debug)]
+        struct RemoveInBResourceCommand;
+
+        impl Command for RemoveInBResourceCommand {
+            fn apply(self, world: &mut World) {
+                world.remove_resource::<InBResource>();
+            }
+        }
+
+        #[derive(Component, Clone)]
+        struct A;
+
+        #[derive(Component, Clone)]
+        struct B1;
+
+        #[derive(Component, Clone)]
+        struct B2;
+
+        #[derive(Component, Clone)]
+        struct C;
+
+        let mut app = App::new();
+        app.add_plugins((
+            MinimalPlugins,
+            bevy::log::LogPlugin::default(),
+            StateMachinePlugin::default(),
+        ));
+        app.update();
+
+        let machine = StateMachine::default()
+            .trans::<A, _>(always, B1)
+            .trans::<B1, _>(always, B2)
+            .trans::<B2, _>(always, C)
+            .command_on_enter_to::<NotState<OneOfState<(B1, B2)>>, OneOfState<(B1, B2)>>(
+                InitInBResourceCommand,
+            )
+            .command_on_exit_from::<OneOfState<(B1, B2)>, NotState<OneOfState<(B1, B2)>>>(
+                RemoveInBResourceCommand,
+            )
+            .set_trans_logging(true);
+
+        app.world_mut().spawn((A, machine));
+
+        app.update();
+        assert!(app.world().contains_resource::<InBResource>());
+
+        app.update();
+        app.update();
+        assert!(!app.world().contains_resource::<InBResource>());
     }
 }
