@@ -9,7 +9,7 @@ use crate::prelude::*;
 
 use self::sealed::EntityStateSealed;
 
-pub(crate) mod sealed {
+mod sealed {
     use std::{any::TypeId, marker::PhantomData};
 
     use bevy::utils::all_tuples;
