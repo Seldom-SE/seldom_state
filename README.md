@@ -27,8 +27,8 @@ commands.spawn((
         .trans_builder(my_trigger_5, |my_state_6: &MyState6, trigger_data| {
             make_state_7(my_state_6, trigger_data)
         })
-        .on_enter::<MyState7, AnyState>(move |entity| entity.insert(my_bundle.clone()))
-        .on_exit::<MyState7, AnyState>(|entity| entity.remove::<MyBundle>())
+        .on_enter::<MyState7>(move |entity| entity.insert(my_bundle.clone()))
+        .on_exit::<MyState7>(|entity| entity.remove::<MyBundle>())
         // etc.
 ));
 ```
