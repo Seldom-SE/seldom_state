@@ -128,7 +128,7 @@ Also, consider managing one set of states through a state machine and another th
 ### I have some other problem that's difficult to express through the `StateMachine` API
 
 Remember that `StateMachine` is component-based, so you can solve some problems normally through
-Bevy's ECS. Instead of `on_enter::<MyState, AnyState>` you can use `Added<MyState>` in a system, and you can
+Bevy's ECS. Instead of `on_enter::<MyState>` you can use `Added<MyState>` in a system, and you can
 even change state manually through `remove` and `insert` commands. If you do change state manually,
 callbacks like `on_enter` will not be called, and you will have to make sure that the state machine
 remains in exactly one state at a time. Else, it will panic.
