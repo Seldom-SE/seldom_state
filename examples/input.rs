@@ -24,17 +24,14 @@ fn init(mut commands: Commands, asset_server: Res<AssetServer>) {
 
     commands.spawn((
         // From `leafwing-input-manager`
-        InputManagerBundle {
-            input_map: InputMap::default()
-                .with_axis(Action::Move, VirtualAxis::horizontal_arrow_keys())
-                .with_axis(
-                    Action::Move,
-                    GamepadControlAxis::new(GamepadAxis::LeftStickX),
-                )
-                .with(Action::Jump, KeyCode::Space)
-                .with(Action::Jump, GamepadButton::South),
-            ..default()
-        },
+        InputMap::default()
+            .with_axis(Action::Move, VirtualAxis::horizontal_arrow_keys())
+            .with_axis(
+                Action::Move,
+                GamepadControlAxis::new(GamepadAxis::LeftStickX),
+            )
+            .with(Action::Jump, KeyCode::Space)
+            .with(Action::Jump, GamepadButton::South),
         // This state machine achieves a very rigid movement system. Consider a state machine for
         // whatever parts of your player controller that involve discrete states. Like the movement
         // in Castlevania and Celeste, and the attacks in a fighting game.

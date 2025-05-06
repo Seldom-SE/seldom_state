@@ -16,19 +16,17 @@ leafwing_input = ["dep:leafwing-input-manager"]
 [dependencies]
 either = "1.9"
 variadics_please = "1.1"
-bevy_math = { version = "0.16.0-rc.3", default-features = false, features = [
-    "std",
-] }
-bevy_ecs = { version = "0.16.0-rc.3", default-features = false }
-bevy_app = { version = "0.16.0-rc.3", default-features = false }
-bevy_log = { version = "0.16.0-rc.3", default-features = false }
-bevy_utils = { version = "0.16.0-rc.3", default-features = false }
-bevy_derive = { version = "0.16.0-rc.3", default-features = false }
-leafwing-input-manager = { git = "https://github.com/Leafwing-Studios/leafwing-input-manager", rev = "90e80af", default-features = false, optional = true }
+bevy_math = { version = "0.16.0", default-features = false, features = ["std"] }
+bevy_ecs = { version = "0.16.0", default-features = false }
+bevy_app = { version = "0.16.0", default-features = false }
+bevy_log = { version = "0.16.0", default-features = false }
+bevy_utils = { version = "0.16.0", default-features = false }
+bevy_derive = { version = "0.16.0", default-features = false }
+leafwing-input-manager = { version = "0.17.0", default-features = false, optional = true }
 
 [dev-dependencies]
-bevy = "0.16.0-rc.3"
-leafwing-input-manager = { git = "https://github.com/Leafwing-Studios/leafwing-input-manager", rev = "90e80af" }
+bevy = "0.16.0"
+leafwing-input-manager = { version = "0.17.0" }
 
 [[example]]
 name = "input"
