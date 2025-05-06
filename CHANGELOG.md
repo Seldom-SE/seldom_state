@@ -1,6 +1,16 @@
 # Changelog
 
-## 0.13 (2024-03-05)
+## 0.14 (2025-05-06)
+
+### Added
+
+- `StateMachine::on_exit_from` and `StateMachine::on_enter_to` allow listening for transitions by
+the previous and next states. The difference between them is the former runs before the transition
+and the latter runs after.
+- Also added `StateMachine::command_on_exit_from` and `StateMachine::command_on_enter_to`
+- Implemented `EntityTrigger` for `Box<dyn EntityTrigger>`
+
+## 0.13 (2025-03-05)
 
 ### Added
 
