@@ -12,9 +12,12 @@ repository = "https://github.com/Seldom-SE/seldom_state"
 
 [features]
 leafwing_input = ["dep:leafwing-input-manager"]
+# This lets you serialize/deserialize some types. Not `StateMachine`, though.
+serde = ["dep:serde"]
 
 [dependencies]
 either = "1.9"
+serde = { version = "1.0", features = ["derive"], optional = true }
 variadics_please = "1.1"
 bevy_math = { version = "0.16.0", default-features = false, features = ["std"] }
 bevy_ecs = { version = "0.16.0", default-features = false }

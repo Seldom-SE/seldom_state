@@ -16,6 +16,8 @@ pub use input::{
     clamped_value_max, clamped_value_min, clamped_value_unbounded, just_pressed, just_released,
     pressed, value, value_max, value_min, value_unbounded,
 };
+#[cfg(feature = "serde")]
+use serde::{Deserialize, Serialize};
 
 use std::{convert::Infallible, fmt::Debug};
 
@@ -366,6 +368,7 @@ impl<T: EntityTrigger, U: EntityTrigger> EntityTrigger for OrTrigger<T, U> {
 /// Marker component that represents that the current state has completed. Removed from every entity
 /// each frame after checking triggers. To be used with [`done`].
 #[derive(Component, Debug, Eq, PartialEq, Clone, Copy)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 #[component(storage = "SparseSet")]
 pub enum Done {
     /// Success variant

@@ -432,7 +432,9 @@ pub(crate) fn transition(
 
     // put the borrowed machines back
     for (entity, borrowed_machine) in borrowed_machines {
-        let Ok((_, mut machine)) = machine_query.get_mut(world, entity) else {
+        // Can't use `machine_query` here, since a transition may have added a disabled component,
+        // in which case, we still want to return the state machine
+        let Some(mut machine) = world.get_mut::<StateMachine>(entity) else {
             // The `StateMachine` component was removed in a transition
             continue;
         };
