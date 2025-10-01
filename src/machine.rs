@@ -14,6 +14,7 @@ use crate::{
     set::StateSet,
     state::OnEvent,
     trigger::{IntoTrigger, TriggerOut},
+    ErrList, OK,
 };
 
 pub(crate) fn plug(schedule: Interned<dyn ScheduleLabel>) -> impl Fn(&mut App) {
@@ -32,7 +33,7 @@ trait Transition: Debug + Send + Sync + 'static {
         &'a mut self,
         world: &World,
         entity: Entity,
-    ) -> Option<(Box<dyn 'a + FnOnce(&mut World, TypeId)>, TypeId)>;
+    ) -> Result<Option<(Box<dyn 'a + FnOnce(&mut World, TypeId) -> Result>, TypeId)>>;
 }
 
 /// An edge in the state machine. The type parameters are the [`EntityTrigger`] that causes this
@@ -82,21 +83,26 @@ where
         &'a mut self,
         world: &World,
         entity: Entity,
-    ) -> Option<(Box<dyn 'a + FnOnce(&mut World, TypeId)>, TypeId)> {
-        self.trigger
-            .check(entity, world)
+    ) -> Result<Option<(Box<dyn 'a + FnOnce(&mut World, TypeId) -> Result>, TypeId)>> {
+        Ok(self
+            .trigger
+            .check(entity, world)?
             .into_result()
             .map(|out| {
                 (
                     Box::new(move |world: &mut World, curr: TypeId| {
                         let prev = Prev::remove(entity, world, curr);
-                        let next = self.builder.run(TransCtx { prev, out, entity }, world);
+                        let next = self
+                            .builder
+                            .run(TransCtx { prev, out, entity }, world)
+                            .map_err(|err| err.to_string())?;
                         world.entity_mut(entity).insert(next);
-                    }) as Box<dyn 'a + FnOnce(&mut World, TypeId)>,
+                        OK
+                    }) as Box<dyn 'a + FnOnce(&mut World, TypeId) -> Result>,
                     TypeId::of::<Next>(),
                 )
             })
-            .ok()
+            .ok())
     }
 }
 
@@ -347,30 +353,29 @@ impl StateMachine {
     /// Runs all transitions until one is actually taken. If one is taken, logs the transition and
     /// runs `on_enter/on_exit` triggers.
     // TODO Defer the actual transition so this can be parallelized, and see if that improves perf
-    fn run(&mut self, world: &mut World, entity: Entity) {
+    fn run(&mut self, world: &mut World, entity: Entity) -> Result {
         let mut states = self.states.keys();
         let current = states.find(|&&state| world.entity(entity).contains_type_id(state));
 
         let Some(&current) = current else {
-            error!("Entity {entity:?} is in no state");
-            return;
+            return Err(format!("Entity {entity:?} is in no state").into());
         };
 
         let from = &self.states[&current];
         if let Some(&other) = states.find(|&&state| world.entity(entity).contains_type_id(state)) {
             let state = &from.name;
             let other = &self.states[&other].name;
-            error!("{entity:?} is in multiple states: {state} and {other}");
-            return;
+            return Err(format!("{entity:?} is in multiple states: {state} and {other}").into());
         }
 
         let Some((trans, next_state)) = self
             .transitions
             .iter_mut()
             .filter(|(matches, _)| matches(current))
-            .find_map(|(_, transition)| transition.check(world, entity))
+            .find_map(|(_, transition)| transition.check(world, entity).transpose())
+            .transpose()?
         else {
-            return;
+            return OK;
         };
         let to = &self.states[&next_state];
 
@@ -380,7 +385,7 @@ impl StateMachine {
             }
         }
 
-        trans(world, current);
+        trans(world, current)?;
 
         for (matches_current, matches_next, event) in &self.on_enter {
             if matches_current(current) && matches_next(next_state) {
@@ -393,6 +398,8 @@ impl StateMachine {
         }
 
         self.init_transitions = true;
+
+        OK
     }
 }
 
@@ -402,7 +409,7 @@ impl StateMachine {
 pub(crate) fn transition(
     world: &mut World,
     machine_query: &mut QueryState<(Entity, &mut StateMachine)>,
-) {
+) -> Result {
     // Pull the machines out of the world so we can invoke mutable methods on them. The alternative
     // would be to wrap the entire `StateMachine` in an `Arc<Mutex>`, but that would complicate the
     // API surface and you wouldn't be able to do anything more anyway (since you'd need to lock the
@@ -425,9 +432,11 @@ pub(crate) fn transition(
     // let par_commands = system_state.get(world);
     // let task_pool = ComputeTaskPool::get();
 
+    let mut errs = ErrList::default();
+
     // chunk size of None means to automatically pick
     for &mut (entity, ref mut machine) in &mut borrowed_machines {
-        machine.run(world, entity);
+        errs.push(machine.run(world, entity));
     }
 
     // put the borrowed machines back
@@ -444,6 +453,8 @@ pub(crate) fn transition(
 
     // necessary to actually *apply* the commands we've enqueued
     // system_state.apply(world);
+
+    errs.into()
 }
 
 #[cfg(test)]
@@ -570,11 +581,7 @@ mod tests {
 
         let mut app = App::new();
         app.init_resource::<Test>();
-        app.add_plugins((
-            MinimalPlugins,
-            bevy::log::LogPlugin::default(),
-            StateMachinePlugin::default(),
-        ));
+        app.add_plugins((MinimalPlugins, StateMachinePlugin::default()));
         app.update();
 
         let machine = StateMachine::default()
@@ -617,11 +624,7 @@ mod tests {
         struct C;
 
         let mut app = App::new();
-        app.add_plugins((
-            MinimalPlugins,
-            bevy::log::LogPlugin::default(),
-            StateMachinePlugin::default(),
-        ));
+        app.add_plugins((MinimalPlugins, StateMachinePlugin::default()));
         app.update();
 
         let machine = StateMachine::default()
@@ -683,11 +686,7 @@ mod tests {
         struct C;
 
         let mut app = App::new();
-        app.add_plugins((
-            MinimalPlugins,
-            bevy::log::LogPlugin::default(),
-            StateMachinePlugin::default(),
-        ));
+        app.add_plugins((MinimalPlugins, StateMachinePlugin::default()));
         app.update();
 
         let machine = StateMachine::default()

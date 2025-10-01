@@ -211,7 +211,7 @@ pub trait EntityTrigger: 'static + Send + Sync {
     /// Initializes/resets this trigger. Runs every time the state machine transitions.
     fn init(&mut self, world: &mut World);
     /// Checks whether the state machine should transition
-    fn check(&mut self, entity: Entity, world: &World) -> Self::Out;
+    fn check(&mut self, entity: Entity, world: &World) -> Result<Self::Out>;
 }
 
 impl<T: EntityTrigger> IntoTrigger<()> for T {
@@ -229,7 +229,7 @@ impl<O: 'static + TriggerOut> EntityTrigger for Box<dyn EntityTrigger<Out = O>> 
         (**self).init(world);
     }
 
-    fn check(&mut self, entity: Entity, world: &World) -> Self::Out {
+    fn check(&mut self, entity: Entity, world: &World) -> Result<Self::Out> {
         (**self).check(entity, world)
     }
 }
@@ -249,9 +249,10 @@ where
         t.initialize(world);
     }
 
-    fn check(&mut self, entity: Entity, world: &World) -> Self::Out {
+    fn check(&mut self, entity: Entity, world: &World) -> Result<Self::Out> {
         let Self(t) = self;
-        t.run_readonly(T::In::from_entity(entity), world)
+        Ok(t.run_readonly(T::In::from_entity(entity), world)
+            .map_err(|err| err.to_string())?)
     }
 }
 
@@ -272,12 +273,12 @@ impl<T: EntityTrigger> EntityTrigger for NotTrigger<T> {
         t.init(world);
     }
 
-    fn check(&mut self, entity: Entity, world: &World) -> Self::Out {
+    fn check(&mut self, entity: Entity, world: &World) -> Result<Self::Out> {
         let Self(t) = self;
-        match t.check(entity, world).into_result() {
+        Ok(match t.check(entity, world)?.into_result() {
             Ok(ok) => Err(ok),
             Err(err) => Ok(err),
-        }
+        })
     }
 }
 
@@ -298,15 +299,19 @@ impl<T: EntityTrigger, U: EntityTrigger> EntityTrigger for AndTrigger<T, U> {
         u.init(world);
     }
 
-    fn check(&mut self, entity: Entity, world: &World) -> Self::Out {
+    fn check(&mut self, entity: Entity, world: &World) -> Result<Self::Out> {
         let Self(t, u) = self;
 
-        Ok((
-            t.check(entity, world).into_result().map_err(Either::Left)?,
-            u.check(entity, world)
-                .into_result()
-                .map_err(Either::Right)?,
-        ))
+        Ok(Ok((
+            match t.check(entity, world)?.into_result() {
+                Ok(ok) => ok,
+                Err(err) => return Ok(Err(Either::Left(err))),
+            },
+            match u.check(entity, world)?.into_result() {
+                Ok(ok) => ok,
+                Err(err) => return Ok(Err(Either::Right(err))),
+            },
+        )))
     }
 }
 
@@ -327,11 +332,13 @@ impl<T: EntityTrigger, U: EntityTrigger> EntityTrigger for IgnoreAndTrigger<T, U
         u.init(world);
     }
 
-    fn check(&mut self, entity: Entity, world: &World) -> Self::Out {
+    fn check(&mut self, entity: Entity, world: &World) -> Result<Self::Out> {
         let Self(t, u) = self;
 
-        t.check(entity, world).into_result().map_err(Either::Left)?;
-        u.check(entity, world).into_result().map_err(Either::Right)
+        if let Err(err) = t.check(entity, world)?.into_result() {
+            return Ok(Err(Either::Left(err)));
+        }
+        Ok(u.check(entity, world)?.into_result().map_err(Either::Right))
     }
 }
 
@@ -352,14 +359,14 @@ impl<T: EntityTrigger, U: EntityTrigger> EntityTrigger for OrTrigger<T, U> {
         u.init(world);
     }
 
-    fn check(&mut self, entity: Entity, world: &World) -> Self::Out {
+    fn check(&mut self, entity: Entity, world: &World) -> Result<Self::Out> {
         let Self(t, u) = self;
 
-        match t.check(entity, world).into_result() {
-            Ok(ok) => Ok(Either::Left(ok)),
-            Err(err_1) => match u.check(entity, world).into_result() {
-                Ok(ok) => Ok(Either::Right(ok)),
-                Err(err_2) => Err((err_1, err_2)),
+        match t.check(entity, world)?.into_result() {
+            Ok(ok) => Ok(Ok(Either::Left(ok))),
+            Err(err_1) => match u.check(entity, world)?.into_result() {
+                Ok(ok) => Ok(Ok(Either::Right(ok))),
+                Err(err_2) => Ok(Err((err_1, err_2))),
             },
         }
     }
@@ -390,9 +397,9 @@ pub fn done(expected: Option<Done>) -> impl EntityTrigger<Out = bool> {
 }
 
 /// Trigger that transitions when it receives the associated event
-pub fn on_event<T: Clone + Event>(
+pub fn on_message<T: Clone + Message>(
     mut has_run: Local<bool>,
-    mut reader: EventReader<T>,
+    mut reader: MessageReader<T>,
 ) -> Option<T> {
     if !*has_run {
         reader.read().last();

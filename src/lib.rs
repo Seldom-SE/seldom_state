@@ -9,6 +9,7 @@ pub mod set;
 mod state;
 pub mod trigger;
 
+use bevy_derive::{Deref, DerefMut};
 use bevy_ecs::{intern::Interned, schedule::ScheduleLabel};
 use prelude::*;
 
@@ -64,7 +65,39 @@ pub mod prelude {
     pub use crate::{
         machine::{StateMachine, Trans},
         state::{AnyState, EntityState, NotState, OneOfState},
-        trigger::{always, done, on_event, Done, EntityTrigger, IntoTrigger, Never},
+        trigger::{always, done, on_message, Done, EntityTrigger, IntoTrigger, Never},
         StateMachinePlugin,
     };
+}
+
+const OK: Result = Ok(());
+
+#[derive(Deref, DerefMut, Default)]
+struct ErrList(Vec<BevyError>);
+
+impl ErrList {
+    fn push<T, E: Into<BevyError>>(&mut self, res: Result<T, E>) -> Option<T> {
+        match res {
+            Ok(t) => Some(t),
+            Err(err) => {
+                self.0.push(err.into());
+                None
+            }
+        }
+    }
+}
+
+impl From<ErrList> for Result {
+    fn from(value: ErrList) -> Self {
+        if value.is_empty() {
+            OK
+        } else {
+            Err(value
+                .iter()
+                .map(BevyError::to_string)
+                .collect::<Vec<_>>()
+                .join("; ")
+                .into())
+        }
+    }
 }
