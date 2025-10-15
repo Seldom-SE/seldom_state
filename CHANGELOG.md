@@ -1,5 +1,22 @@
 # Changelog
 
+## 0.15 (2025-10-15)
+
+### Added
+
+- `serde` feature, which implements `Serialize` and `Deserialize` for `Done`
+
+### Changed
+
+- Updated `bevy` to 0.17
+- Updated `leafwing-input-manager` to 0.18
+- Renamed `on_event` to `on_message`
+- State machine errors are handled by the default error handler
+
+### Fixed
+
+- Fixed `StateMachine` resetting to its default value when a transition adds a disabled component
+
 ## 0.14 (2025-05-06)
 
 ### Added
@@ -9,6 +26,11 @@ the previous and next states. The difference between them is the former runs bef
 and the latter runs after.
 - Also added `StateMachine::command_on_exit_from` and `StateMachine::command_on_enter_to`
 - Implemented `EntityTrigger` for `Box<dyn EntityTrigger>`
+
+### Changed
+
+- Updated `bevy` to 0.16
+- Updated `leafwing-input-manager` to 0.17
 
 ## 0.13 (2025-03-05)
 
