@@ -28,8 +28,16 @@ bevy_derive = { version = "0.17.1", default-features = false }
 leafwing-input-manager = { version = "0.18.0", default-features = false, optional = true }
 
 [dev-dependencies]
-bevy = "0.17.1"
 leafwing-input-manager = { version = "0.18.0" }
+
+[dev-dependencies.bevy]
+version = "0.17.1"
+default-features = false
+features = [
+    "bevy_sprite_render",
+    "png",
+    "x11",
+]
 
 [[example]]
 name = "input"
