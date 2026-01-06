@@ -241,7 +241,8 @@ impl StateMachine {
     }
 
     /// Adds an on-enter event to the state machine. Whenever the state machine transitions
-    /// from the given previous state to the given next state, it will run the event.
+    /// from the given previous state to the given next state, it will run the event. This will not
+    /// occur on manual transitions.
     pub fn on_enter_to<Prev: EntityState, Next: EntityState>(
         mut self,
         on_enter: impl 'static + Fn(&mut EntityCommands) + Send + Sync,
@@ -256,7 +257,8 @@ impl StateMachine {
     }
 
     /// Adds an on-enter event to the state machine. Whenever the state machine transitions
-    /// from any previous state to the given next state, it will run the event.
+    /// from any previous state to the given next state, it will run the event. This will not occur
+    /// on manual transitions.
     pub fn on_enter<Next: EntityState>(
         self,
         on_enter: impl 'static + Fn(&mut EntityCommands) + Send + Sync,
@@ -265,7 +267,8 @@ impl StateMachine {
     }
 
     /// Adds an on-enter event to the state machine. Whenever the state machine transitions
-    /// from the given previous state to the given next state, it will run the event.
+    /// from the given previous state to the given next state, it will run the event. This will not
+    /// occur on manual transitions.
     pub fn on_exit_from<Prev: EntityState, Next: EntityState>(
         mut self,
         on_exit: impl 'static + Fn(&mut EntityCommands) + Send + Sync,
@@ -280,7 +283,8 @@ impl StateMachine {
     }
 
     /// Adds an on-exit event to the state machine. Whenever the state machine transitions
-    /// from the given previous state to any next state, it will run the event.
+    /// from the given previous state to any next state, it will run the event. This will not occur
+    /// on manual transitions.
     pub fn on_exit<Prev: EntityState>(
         self,
         on_exit: impl 'static + Fn(&mut EntityCommands) + Send + Sync,
@@ -289,7 +293,8 @@ impl StateMachine {
     }
 
     /// Adds an on-enter command to the state machine. Whenever the state machine transitions
-    /// from the given previous state to the given next state, it will run the command.
+    /// from the given previous state to the given next state, it will run the command. This will
+    /// not occur on manual transitions.
     pub fn command_on_enter_to<Prev: EntityState, Next: EntityState>(
         mut self,
         command: impl Clone + Command + Sync,
@@ -304,13 +309,15 @@ impl StateMachine {
     }
 
     /// Adds an on-enter command to the state machine. Whenever the state machine transitions
-    /// from any previous state to the given next state, it will run the command.
+    /// from any previous state to the given next state, it will run the command. This will not
+    /// occur on manual transitions.
     pub fn command_on_enter<Next: EntityState>(self, command: impl Clone + Command + Sync) -> Self {
         self.command_on_enter_to::<AnyState, Next>(command)
     }
 
     /// Adds an on-exit command to the state machine. Whenever the state machine transitions
-    /// from the given previous state to the given next state, it will run the command.
+    /// from the given previous state to the given next state, it will run the command. This will
+    /// not occur on manual transitions.
     pub fn command_on_exit_from<Prev: EntityState, Next: EntityState>(
         mut self,
         command: impl Clone + Command + Sync,
@@ -325,7 +332,8 @@ impl StateMachine {
     }
 
     /// Adds an on-exit command to the state machine. Whenever the state machine transitions
-    /// from the given previous state to any next state, it will run the command.
+    /// from the given previous state to any next state, it will run the command. This will not
+    /// occur on manual transitions.
     pub fn command_on_exit<Prev: EntityState>(self, command: impl Clone + Command + Sync) -> Self {
         self.command_on_exit_from::<Prev, AnyState>(command)
     }
