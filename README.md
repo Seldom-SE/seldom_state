@@ -36,7 +36,7 @@ commands.spawn((
 For more complete examples, see the `examples` directory. The `chase.rs` example is written like a
 guide, so it is good for learning. If you need help, feel free to ping me on
 [the Bevy Discord server](https://discord.com/invite/bevy) (`@Seldom`)! If anything needs
-improvement, feel free to submit an issue or pr!
+improvement, feel free to submit an issue or PR!
 
 ## Features
 
