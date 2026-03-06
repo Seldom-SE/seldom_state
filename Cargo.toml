@@ -16,22 +16,22 @@ leafwing_input = ["dep:leafwing-input-manager"]
 serde = ["dep:serde"]
 
 [dependencies]
-either = "1.9"
+either = "1.15"
 serde = { version = "1.0", features = ["derive"], optional = true }
 variadics_please = "1.1"
-bevy_math = { version = "0.17.1", default-features = false, features = ["std"] }
-bevy_ecs = { version = "0.17.1", default-features = false }
-bevy_app = { version = "0.17.1", default-features = false }
-bevy_log = { version = "0.17.1", default-features = false }
-bevy_utils = { version = "0.17.1", default-features = false }
-bevy_derive = { version = "0.17.1", default-features = false }
-leafwing-input-manager = { version = "0.18.0", default-features = false, optional = true }
+bevy_math = { version = "0.18.1", default-features = false, features = ["std"] }
+bevy_ecs = { version = "0.18.1", default-features = false }
+bevy_app = { version = "0.18.1", default-features = false }
+bevy_log = { version = "0.18.1", default-features = false }
+bevy_utils = { version = "0.18.1", default-features = false }
+bevy_derive = { version = "0.18.1", default-features = false }
+leafwing-input-manager = { version = "0.20.0", default-features = false, optional = true }
 
 [dev-dependencies]
-leafwing-input-manager = { version = "0.18.0" }
+leafwing-input-manager = { version = "0.20.0" }
 
 [dev-dependencies.bevy]
-version = "0.17.1"
+version = "0.18.1"
 default-features = false
 features = [
     "bevy_sprite_render",
