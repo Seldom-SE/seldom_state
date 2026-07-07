@@ -1,6 +1,6 @@
 [package]
 name = "seldom_state"
-version = "0.16.0"
+version = "0.17.0"
 edition = "2021"
 categories = ["game-development"]
 description = "Component-based state machine plugin for Bevy. Useful for AI, player state, and other entities that occupy various states."
@@ -19,19 +19,19 @@ serde = ["dep:serde"]
 either = "1.15"
 serde = { version = "1.0", features = ["derive"], optional = true }
 variadics_please = "1.1"
-bevy_math = { version = "0.18.1", default-features = false, features = ["std"] }
-bevy_ecs = { version = "0.18.1", default-features = false }
-bevy_app = { version = "0.18.1", default-features = false }
-bevy_log = { version = "0.18.1", default-features = false }
-bevy_utils = { version = "0.18.1", default-features = false }
-bevy_derive = { version = "0.18.1", default-features = false }
-leafwing-input-manager = { version = "0.20.0", default-features = false, optional = true }
+bevy_math = { version = "0.19.0", default-features = false, features = ["std"] }
+bevy_ecs = { version = "0.19.0", default-features = false }
+bevy_app = { version = "0.19.0", default-features = false }
+bevy_log = { version = "0.19.0", default-features = false }
+bevy_utils = { version = "0.19.0", default-features = false }
+bevy_derive = { version = "0.19.0", default-features = false }
+leafwing-input-manager = { version = "0.21.0", default-features = false, optional = true }
 
 [dev-dependencies]
-leafwing-input-manager = { version = "0.20.0" }
+leafwing-input-manager = { version = "0.21.0" }
 
 [dev-dependencies.bevy]
-version = "0.18.1"
+version = "0.19.0"
 default-features = false
 features = [
     "bevy_sprite_render",
