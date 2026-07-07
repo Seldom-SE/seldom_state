@@ -61,7 +61,7 @@ where
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         f.debug_struct("TransitionImpl")
             .field("trigger", &self.trigger.type_id())
-            .field("builder", &self.builder.type_id())
+            .field("builder", &self.builder.system_type())
             .field("phantom", &self.phantom)
             .finish()
     }
@@ -297,7 +297,7 @@ impl StateMachine {
     /// not occur on manual transitions.
     pub fn command_on_enter_to<Prev: EntityState, Next: EntityState>(
         mut self,
-        command: impl Clone + Command + Sync,
+        command: impl Clone + Command<Out = ()> + Sync,
     ) -> Self {
         self.on_enter.push((
             Prev::matches,
@@ -311,7 +311,10 @@ impl StateMachine {
     /// Adds an on-enter command to the state machine. Whenever the state machine transitions
     /// from any previous state to the given next state, it will run the command. This will not
     /// occur on manual transitions.
-    pub fn command_on_enter<Next: EntityState>(self, command: impl Clone + Command + Sync) -> Self {
+    pub fn command_on_enter<Next: EntityState>(
+        self,
+        command: impl Clone + Command<Out = ()> + Sync,
+    ) -> Self {
         self.command_on_enter_to::<AnyState, Next>(command)
     }
 
@@ -320,7 +323,7 @@ impl StateMachine {
     /// not occur on manual transitions.
     pub fn command_on_exit_from<Prev: EntityState, Next: EntityState>(
         mut self,
-        command: impl Clone + Command + Sync,
+        command: impl Clone + Command<Out = ()> + Sync,
     ) -> Self {
         self.on_exit.push((
             Prev::matches,
@@ -334,7 +337,10 @@ impl StateMachine {
     /// Adds an on-exit command to the state machine. Whenever the state machine transitions
     /// from the given previous state to any next state, it will run the command. This will not
     /// occur on manual transitions.
-    pub fn command_on_exit<Prev: EntityState>(self, command: impl Clone + Command + Sync) -> Self {
+    pub fn command_on_exit<Prev: EntityState>(
+        self,
+        command: impl Clone + Command<Out = ()> + Sync,
+    ) -> Self {
         self.command_on_exit_from::<Prev, AnyState>(command)
     }
 
@@ -568,7 +574,9 @@ mod tests {
         }
 
         impl Command for MyCommand {
-            fn apply(self, world: &mut World) {
+            type Out = ();
+
+            fn apply(self, world: &mut World) -> Self::Out {
                 let mut test = world.resource_mut::<Test>();
                 if self.on_any {
                     test.on_any = true;
@@ -667,7 +675,9 @@ mod tests {
         struct InitInBResourceCommand;
 
         impl Command for InitInBResourceCommand {
-            fn apply(self, world: &mut World) {
+            type Out = ();
+
+            fn apply(self, world: &mut World) -> Self::Out {
                 world.init_resource::<InBResource>();
             }
         }
@@ -676,7 +686,9 @@ mod tests {
         struct RemoveInBResourceCommand;
 
         impl Command for RemoveInBResourceCommand {
-            fn apply(self, world: &mut World) {
+            type Out = ();
+
+            fn apply(self, world: &mut World) -> Self::Out {
                 world.remove_resource::<InBResource>();
             }
         }

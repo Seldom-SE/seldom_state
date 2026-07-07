@@ -149,7 +149,7 @@ impl<F: Fn(&mut EntityCommands) + Send + Sync> EntityEvent for F {
     }
 }
 
-pub(crate) trait CommandEvent: Command + Sync {
+pub(crate) trait CommandEvent: Command<Out = ()> + Sync {
     fn trigger(&self, commands: &mut Commands);
 }
 
@@ -159,7 +159,7 @@ impl Debug for dyn CommandEvent {
     }
 }
 
-impl<C: Clone + Command + Sync> CommandEvent for C {
+impl<C: Clone + Command<Out = ()> + Sync> CommandEvent for C {
     fn trigger(&self, commands: &mut Commands) {
         commands.queue(self.clone())
     }
